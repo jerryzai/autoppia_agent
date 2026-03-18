@@ -38,6 +38,20 @@ uvicorn main:app --host 0.0.0.0 --port 5000
    ```
 3. Start the miner with PM2
 
+## Leaderboard task prompts
+
+Eval tasks and natural-language prompts are listed at:
+
+`https://api-leaderboard.autoppia.com/api/v1/tasks/search?successMode=all&page=1&limit=100&includeDetails=false`
+
+Paginate with `page=2`, etc. To dump locally:
+
+```bash
+python scripts/fetch_leaderboard_tasks.py --out data/leaderboard_tasks.json
+```
+
+Each row has `useCase` (e.g. `FILM_DETAIL`, `MARK_AS_UNREAD`) and `prompt` with constraints. The agent parses common IWA phrasing (`genres field CONTAINS`, `does NOT equal`, `less equal`, …) into `TASK_CONSTRAINTS` for the LLM. Tune `_classify_task` / `_TASK_PLAYBOOKS` in `agent.py` for weak use cases.
+
 ## Supported Actions
 
 - `navigate` - `{"type": "navigate", "url": "https://..."}`

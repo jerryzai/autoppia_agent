@@ -1445,6 +1445,20 @@ def _parse_task_constraints(task: str) -> List[Dict[str, Any]]:
     _FLD = r"([\w]+(?:_[\w]+)*)"  # one or more snake_case words (no spaces)
 
     basic: List[tuple] = [
+        # IWA leaderboard: "genres field CONTAINS", "rating field EQUALS", "duration field is LESS THAN 126"
+        (r"([\w]+)\s+field\s+CONTAINS\s+['\"]([^'\"]+)['\"]", "contains"),
+        (r"([\w]+)\s+field\s+EQUALS\s+['\"]([^'\"]+)['\"]", "equals"),
+        (r"([\w]+)\s+field\s+is\s+LESS\s+THAN\s+([^\s,'\"\n\]]+)", "less_than"),
+        (r"([\w]+)\s+field\s+is\s+GREATER\s+THAN\s+([^\s,'\"\n\]]+)", "greater_than"),
+        (r"([\w]+)\s+field\s+is\s+GREATER\s+THAN\s+OR\s+EQUAL\s+TO\s+([^\s,'\"\n\]]+)", "greater_equal"),
+        # "from_email does NOT equal 'x'" (leaderboard phrasing)
+        (_FLD + r"\s+does\s+NOT\s+equal\s+['\"]([^'\"]+)['\"]", "not_equals"),
+        (_FLD + r"\s+does\s+NOT\s+equal\s+([^\s,'\"\n]+)", "not_equals"),
+        # "name is NOT 'file.docx'" (documents, etc.)
+        (r"([\w]+)\s+is\s+NOT\s+['\"]([^'\"]+)['\"]", "not_equals"),
+        # IWA shorthand: "price less equal '17.98'"
+        (_FLD + r"\s+less\s+equal\s+['\"]?([^\s,'\"\n\]]+)['\"]?", "less_equal"),
+        (_FLD + r"\s+greater\s+equal\s+['\"]?([^\s,'\"\n\]]+)['\"]?", "greater_equal"),
         # IWA verbose: "field that does NOT CONTAIN 'value'"
         (_FLD + r"(?:\s+that)?\s+does\s+NOT\s+CONTAIN\s+['\"]([^'\"]+)['\"]", "not_contains"),
         (_FLD + r"(?:\s+that)?\s+does\s+NOT\s+CONTAIN\s+([^\s,'\"\n]+)", "not_contains"),
@@ -1472,9 +1486,9 @@ def _parse_task_constraints(task: str) -> List[Dict[str, Any]]:
         # "AFTER 'date'" / "BEFORE 'date'" in date context
         (_FLD + r"\s+(?:is\s+)?(?:on\s+or\s+)?AFTER\s+['\"]([^'\"]+)['\"]", "greater_equal"),
         (_FLD + r"\s+(?:is\s+)?(?:on\s+or\s+)?BEFORE\s+['\"]([^'\"]+)['\"]", "less_equal"),
-        # plain greater/less than
-        (_FLD + r"\s+greater\s+than\s+['\"]?([^\s,'\"\n\]]+)['\"]?", "greater_than"),
-        (_FLD + r"\s+less\s+than\s+['\"]?([^\s,'\"\n\]]+)['\"]?", "less_than"),
+        # plain greater/less than (optional "is": "rating is GREATER THAN 3.5")
+        (_FLD + r"\s+(?:is\s+)?greater\s+than\s+['\"]?([^\s,'\"\n\]]+)['\"]?", "greater_than"),
+        (_FLD + r"\s+(?:is\s+)?less\s+than\s+['\"]?([^\s,'\"\n\]]+)['\"]?", "less_than"),
         # BELOW / ABOVE
         (_FLD + r"\s+BELOW\s+['\"]?([^\s,'\"\n\]]+)['\"]?", "less_than"),
         (_FLD + r"\s+ABOVE\s+['\"]?([^\s,'\"\n\]]+)['\"]?", "greater_than"),
@@ -1502,7 +1516,22 @@ def _parse_task_constraints(task: str) -> List[Dict[str, Any]]:
             seen.add(key2)
             constraints.append({"field": field, "op": "not_equals", "value": val})
 
-    return constraints
+    # Drop false positives from overlapping regexes (e.g. "field EQUALS" after "rating field")
+    _junk = frozenset({"field", "does", "less", "greater", "the", "a", "an"})
+    out: List[Dict[str, Any]] = []
+    seen2: set = set()
+    for c in constraints:
+        f = str(c.get("field") or "").lower()
+        if f in _junk:
+            continue
+        if f == "not" and c.get("op") in {"equals", "not_contains", "contains"}:
+            continue
+        k = (f, c.get("op"), str(c.get("value")))
+        if k in seen2:
+            continue
+        seen2.add(k)
+        out.append(c)
+    return out
 
 
 def _format_constraints_block(constraints: List[Dict[str, Any]]) -> str:
@@ -2225,9 +2254,9 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "3) Click it."
     ),
     "FILM_DETAIL": (
-        "PLAYBOOK: 1) On AutoCinema, browse the movie list. "
-        "2) Find a movie matching ALL TASK_CONSTRAINTS (genres NOT CONTAIN, duration GREATER EQUAL, etc.). "
-        "3) Click on that movie to open its detail page."
+        "PLAYBOOK: 1) On AutoCinema, browse or filter the movie list. "
+        "2) Find ONE movie satisfying EVERY constraint (e.g. genres CONTAINS X, rating EQUALS Y, duration < Z). "
+        "Use visible_text/search_text if needed. 3) Click that movie to open its detail page."
     ),
     "SEARCH_FILM": (
         "PLAYBOOK: 1) On AutoCinema, find the search bar. "
@@ -3827,7 +3856,10 @@ def _llm_decide(
         "job_title_contains→type any title CONTAINING that substring.\n"
         "MULTI-STEP: complete login first, then the secondary action. Track progress in memory.\n"
         "TOOLS: Return {\"tool\":\"<name>\",\"args\":{...}} to inspect page. Max 1 tool per step. "
-        "Tools: list_cards({max_cards?,max_text?}); search_text({query}); list_links({}); extract_forms({})."
+        "Tools: visible_text({max_chars}); search_text({query,regex?}); list_candidates({max_n}); "
+        "list_cards({max_cards?,max_text?}); list_links({href_regex?,text_regex?}); "
+        "extract_forms({}); css_select({selector,max_nodes?}); xpath_select({xpath}). "
+        "Use tools when list/filter tasks need to find the ONE row matching ALL constraints."
     )
 
     history_lines: List[str] = []
@@ -3845,9 +3877,19 @@ def _llm_decide(
 
     structured = _structured_hints(task, candidates)
 
-    # Only include cards on early steps to save tokens
+    # Cards on early steps; longer for constraint-heavy list tasks
     cards_preview = ""
-    if int(step_index) <= 2:
+    _task_l = (task or "").lower()
+    _needs_cards = int(step_index) <= 2 or (
+        int(step_index) <= 5
+        and bool(
+            re.search(
+                r"\b(where|filter|genres\s+field|rating\s+field|document|email|task|movie|hotel|job|member|restaurant)\b",
+                _task_l,
+            )
+        )
+    )
+    if _needs_cards:
         try:
             cards_obj = _tool_list_cards(candidates=candidates, max_cards=6, max_text=120, max_actions_per_card=1)
             if isinstance(cards_obj, dict) and cards_obj.get("ok") and cards_obj.get("cards"):
@@ -3910,7 +3952,7 @@ def _llm_decide(
 
     usages: List[Dict[str, Any]] = []
     tool_calls = 0
-    max_tool_calls = int(os.getenv("AGENT_MAX_TOOL_CALLS", "2"))
+    max_tool_calls = int(os.getenv("AGENT_MAX_TOOL_CALLS", "4"))
 
     messages = [
         {"role": "system", "content": system_msg},
@@ -4117,8 +4159,8 @@ async def act(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     step_index = int(payload.get("step_index") or 0)
     return_metrics = os.getenv("AGENT_RETURN_METRICS", "0").lower() in {"1", "true", "yes"}
 
-    # Hard step cap: force done after 7 steps to avoid over-cost
-    max_steps_hard = int(os.getenv("AGENT_MAX_STEPS", "7"))
+    # Step cap (raise via AGENT_MAX_STEPS for multi-step IWA tasks: filter → open → act)
+    max_steps_hard = int(os.getenv("AGENT_MAX_STEPS", "14"))
     if step_index >= max_steps_hard:
         return _resp([{"type": "DoneAction", "success": True}], {"decision": "forced_done_step_cap", "step_index": step_index})
 
