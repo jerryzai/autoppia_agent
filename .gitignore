@@ -7,3 +7,8 @@ venv/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Leaderboard / local eval artifacts (fetch with scripts; do not commit)
+data/leaderboard_tasks*.json
+data/new_evaluation_types.txt
+data/eval_result.json

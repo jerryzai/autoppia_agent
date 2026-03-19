@@ -38,19 +38,20 @@ uvicorn main:app --host 0.0.0.0 --port 5000
    ```
 3. Start the miner with PM2
 
-## Leaderboard task prompts
+## Leaderboard / eval data (local only)
 
-Eval tasks and natural-language prompts are listed at:
+Do **not** commit downloaded task dumps or eval outputs; they are listed in `.gitignore`.
 
-`https://api-leaderboard.autoppia.com/api/v1/tasks/search?successMode=all&page=1&limit=100&includeDetails=false`
-
-Paginate with `page=2`, etc. To dump locally:
+To refresh prompts locally, run (output path is ignored by git):
 
 ```bash
-python scripts/fetch_leaderboard_tasks.py --out data/leaderboard_tasks.json
+python scripts/fetch_leaderboard_tasks.py --out data/leaderboard_tasks_all_pages.json
+python scripts/list_usecases.py
 ```
 
-Each row has `useCase` (e.g. `FILM_DETAIL`, `MARK_AS_UNREAD`) and `prompt` with constraints. The agent parses common IWA phrasing (`genres field CONTAINS`, `does NOT equal`, `less equal`, …) into `TASK_CONSTRAINTS` for the LLM. Tune `_classify_task` / `_TASK_PLAYBOOKS` in `agent.py` for weak use cases.
+The fetch script’s `BASE` URL lives in `scripts/fetch_leaderboard_tasks.py` if you need to change it.
+
+Each task row has `useCase` and `prompt` with constraints. The agent maps those into `TASK_CONSTRAINTS` for the LLM. Tune `_classify_task` / `_TASK_PLAYBOOKS` in `agent.py` for weak use cases.
 
 ## Supported Actions
 

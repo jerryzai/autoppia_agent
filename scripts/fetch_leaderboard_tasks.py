@@ -20,7 +20,15 @@ BASE = "https://api-leaderboard.autoppia.com/api/v1/tasks/search"
 def fetch_page(page: int, limit: int, success_mode: str) -> dict:
     q = f"successMode={success_mode}&page={page}&limit={limit}&includeDetails=false"
     url = f"{BASE}?{q}"
-    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0 (compatible; VictorAgent/1.0)",
+            "Origin": "https://api-leaderboard.autoppia.com",
+            "Referer": "https://api-leaderboard.autoppia.com/",
+        },
+    )
     with urllib.request.urlopen(req, timeout=60) as resp:
         return json.loads(resp.read().decode())
 

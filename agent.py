@@ -2164,6 +2164,95 @@ def _classify_task(task: str) -> str:
     return "GENERAL"
 
 
+_USECASE_PLAYBOOK_ALIASES: Dict[str, str] = {
+    "ADD_TO_READING_LIST": "LOGIN_THEN_LIST_ACTION",
+    "ADD_TO_WISHLIST": "LOGIN_THEN_LIST_ACTION",
+    "APPOINTMENT_BOOKED_SUCCESSFULLY": "REQUEST_QUICK_APPOINTMENT",
+    "AUTOLIST_SELECT_DATE_FOR_TASK": "AUTOLIST_TASK_ADDED",
+    "BACK_TO_ALL_HOTELS": "BACK_TO_ALL_JOBS",
+    "BOOK_FROM_WISHLIST": "RESERVE_HOTEL",
+    "BOOK_RESTAURANT": "LOGIN_THEN_PURCHASE",
+    "CREATE_LABEL": "GENERAL",
+    "DELETE_CLIENT": "LOGIN_THEN_DELETE_ITEM",
+    "DELETE_FILM": "LOGIN_THEN_DELETE_ITEM",
+    "EDIT_CART_ITEM": "QUANTITY_CHANGED",
+    "EDIT_USER": "LOGIN_THEN_EDIT_PROFILE",
+    "EMPTY_CART": "VIEW_CART",
+    "EVENT_ADD_REMINDER": "ADD_EVENT",
+    "EVENT_REMOVE_REMINDER": "CANCEL_ADD_EVENT",
+    "FILTER_FILM": "FILTER_ITEM",
+    "LOGOUT": "LOGIN_THEN_LOGOUT",
+    "LOG_DELETE": "LOGIN_THEN_DELETE_ITEM",
+    "NAVBAR_HIRE_LATER_CLICK": "GENERAL",
+    "NEW_LOG_ADDED": "GENERAL",
+    "OCCASION_SELECTED": "GENERAL",
+    "PLACE_ORDER": "LOGIN_THEN_PURCHASE",
+    "QUICK_HIRE": "GENERAL",
+    "QUICK_REORDER": "LOGIN_THEN_PURCHASE",
+    "REMOVE_FROM_CART_BOOK": "VIEW_CART",
+    "REMOVE_FROM_WATCHLIST": "LOGIN_THEN_LIST_ACTION",
+    "REMOVE_FROM_WISHLIST": "LOGIN_THEN_LIST_ACTION",
+    "REMOVE_POST": "GENERAL",
+    "SEARCH": "SEARCH_ITEM",
+    "SEARCH_CLIENT": "SEARCH_ITEM",
+    "SELECT_TODAY": "SELECT_DATE",
+    "SET_RATE_RANGE": "FILTER_ITEM",
+    "SHARE_BOOK": "SHARE_ITEM",
+    "UPDATE_MATTER": "LOGIN_THEN_EDIT_ITEM",
+    "VIEW_FULL_MENU": "COLLAPSE_MENU",
+    "VIEW_HOTEL": "NAVIGATE_DETAIL",
+    "VIEW_USER_PROFILE": "EDIT_PROFILE",
+}
+
+
+def _resolve_task_type(task: str, eval_type: str = "") -> str:
+    et = (eval_type or "").strip().upper()
+    if et:
+        if et in _TASK_PLAYBOOKS:
+            return et
+        aliased = _USECASE_PLAYBOOK_ALIASES.get(et, "")
+        if aliased and aliased in _TASK_PLAYBOOKS:
+            return aliased
+    return _classify_task(task)
+
+
+def _fallback_playbook_from_eval_type(eval_type: str) -> str:
+    et = (eval_type or "").strip().upper()
+    if not et:
+        return _TASK_PLAYBOOKS["GENERAL"]
+    if et.startswith(("SEARCH_", "FIND_")):
+        return (
+            "PLAYBOOK: 1) Find the relevant search/filter control. "
+            "2) Apply ALL TASK_CONSTRAINTS. "
+            "3) Open the matching item and complete the requested action."
+        )
+    if et.startswith(("VIEW_", "OPEN_")):
+        return (
+            "PLAYBOOK: 1) Locate the row/card matching ALL TASK_CONSTRAINTS. "
+            "2) Open details/modal/page for that exact item."
+        )
+    if et.startswith(("ADD_", "CREATE_")):
+        return (
+            "PLAYBOOK: 1) Open add/create form or modal. "
+            "2) Fill fields exactly from TASK_CONSTRAINTS. "
+            "3) Submit/save."
+        )
+    if et.startswith(("EDIT_", "UPDATE_")):
+        return (
+            "PLAYBOOK: 1) Find the matching item first. "
+            "2) Open edit form/modal. "
+            "3) Update fields exactly per TASK_CONSTRAINTS. "
+            "4) Save."
+        )
+    if et.startswith(("DELETE_", "REMOVE_")):
+        return (
+            "PLAYBOOK: 1) Find the matching item first. "
+            "2) Click delete/remove for that item only. "
+            "3) Confirm if a confirmation dialog appears."
+        )
+    return _TASK_PLAYBOOKS["GENERAL"]
+
+
 _TASK_PLAYBOOKS: Dict[str, str] = {
     "REGISTRATION": (
         "PLAYBOOK: 1) Navigate to register/signup page. "
@@ -3813,11 +3902,12 @@ def _llm_decide(
     state_delta: str = "",
     prev_sig_set: set[str] | None = None,
     relevant_data: Dict[str, Any] | None = None,
+    eval_type: str = "",
 ) -> Dict[str, Any]:
     browser_state = _format_browser_state(candidates=candidates, prev_sig_set=prev_sig_set)
 
-    task_type = _classify_task(task)
-    playbook = _TASK_PLAYBOOKS.get(task_type, _TASK_PLAYBOOKS["GENERAL"])
+    task_type = _resolve_task_type(task, eval_type=eval_type)
+    playbook = _TASK_PLAYBOOKS.get(task_type, _fallback_playbook_from_eval_type(eval_type))
 
     # Website detection
     website_name = _detect_website(url)
@@ -3929,7 +4019,7 @@ def _llm_decide(
 
     user_msg = (
         f"TASK: {task}\n"
-        f"TYPE:{task_type} SITE:{website_name} STEP:{int(step_index)} URL:{url}\n\n"
+        f"TYPE:{task_type} EVAL_TYPE:{(eval_type or '').strip().upper() or 'unknown'} SITE:{website_name} STEP:{int(step_index)} URL:{url}\n\n"
         + (f"SITE_HINTS: {website_ctx_short}\n\n" if website_ctx_short else "")
         + (creds_block + "\n" if creds_block else "")
         + (constraints_block + "\n\n" if constraints_block else "")
@@ -4155,6 +4245,12 @@ async def act(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
 
     task_id = str(payload.get("task_id") or "")
     task = payload.get("prompt") or payload.get("task_prompt") or ""
+    eval_type = (
+        payload.get("useCase")
+        or payload.get("use_case")
+        or payload.get("evaluation_type")
+        or ""
+    )
     url = payload.get("url") or ""
     step_index = int(payload.get("step_index") or 0)
     return_metrics = os.getenv("AGENT_RETURN_METRICS", "0").lower() in {"1", "true", "yes"}
@@ -4229,6 +4325,7 @@ async def act(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
             state_delta=state_delta,
             prev_sig_set=prev_sig_set,
             relevant_data=relevant_data,
+            eval_type=str(eval_type or ""),
         )
         if os.getenv("AGENT_LOG_DECISIONS", "0").lower() in {"1", "true", "yes"}:
             try:
