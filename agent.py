@@ -1445,20 +1445,6 @@ def _parse_task_constraints(task: str) -> List[Dict[str, Any]]:
     _FLD = r"([\w]+(?:_[\w]+)*)"  # one or more snake_case words (no spaces)
 
     basic: List[tuple] = [
-        # IWA leaderboard: "genres field CONTAINS", "rating field EQUALS", "duration field is LESS THAN 126"
-        (r"([\w]+)\s+field\s+CONTAINS\s+['\"]([^'\"]+)['\"]", "contains"),
-        (r"([\w]+)\s+field\s+EQUALS\s+['\"]([^'\"]+)['\"]", "equals"),
-        (r"([\w]+)\s+field\s+is\s+LESS\s+THAN\s+([^\s,'\"\n\]]+)", "less_than"),
-        (r"([\w]+)\s+field\s+is\s+GREATER\s+THAN\s+([^\s,'\"\n\]]+)", "greater_than"),
-        (r"([\w]+)\s+field\s+is\s+GREATER\s+THAN\s+OR\s+EQUAL\s+TO\s+([^\s,'\"\n\]]+)", "greater_equal"),
-        # "from_email does NOT equal 'x'" (leaderboard phrasing)
-        (_FLD + r"\s+does\s+NOT\s+equal\s+['\"]([^'\"]+)['\"]", "not_equals"),
-        (_FLD + r"\s+does\s+NOT\s+equal\s+([^\s,'\"\n]+)", "not_equals"),
-        # "name is NOT 'file.docx'" (documents, etc.)
-        (r"([\w]+)\s+is\s+NOT\s+['\"]([^'\"]+)['\"]", "not_equals"),
-        # IWA shorthand: "price less equal '17.98'"
-        (_FLD + r"\s+less\s+equal\s+['\"]?([^\s,'\"\n\]]+)['\"]?", "less_equal"),
-        (_FLD + r"\s+greater\s+equal\s+['\"]?([^\s,'\"\n\]]+)['\"]?", "greater_equal"),
         # IWA verbose: "field that does NOT CONTAIN 'value'"
         (_FLD + r"(?:\s+that)?\s+does\s+NOT\s+CONTAIN\s+['\"]([^'\"]+)['\"]", "not_contains"),
         (_FLD + r"(?:\s+that)?\s+does\s+NOT\s+CONTAIN\s+([^\s,'\"\n]+)", "not_contains"),
@@ -1486,9 +1472,9 @@ def _parse_task_constraints(task: str) -> List[Dict[str, Any]]:
         # "AFTER 'date'" / "BEFORE 'date'" in date context
         (_FLD + r"\s+(?:is\s+)?(?:on\s+or\s+)?AFTER\s+['\"]([^'\"]+)['\"]", "greater_equal"),
         (_FLD + r"\s+(?:is\s+)?(?:on\s+or\s+)?BEFORE\s+['\"]([^'\"]+)['\"]", "less_equal"),
-        # plain greater/less than (optional "is": "rating is GREATER THAN 3.5")
-        (_FLD + r"\s+(?:is\s+)?greater\s+than\s+['\"]?([^\s,'\"\n\]]+)['\"]?", "greater_than"),
-        (_FLD + r"\s+(?:is\s+)?less\s+than\s+['\"]?([^\s,'\"\n\]]+)['\"]?", "less_than"),
+        # plain greater/less than
+        (_FLD + r"\s+greater\s+than\s+['\"]?([^\s,'\"\n\]]+)['\"]?", "greater_than"),
+        (_FLD + r"\s+less\s+than\s+['\"]?([^\s,'\"\n\]]+)['\"]?", "less_than"),
         # BELOW / ABOVE
         (_FLD + r"\s+BELOW\s+['\"]?([^\s,'\"\n\]]+)['\"]?", "less_than"),
         (_FLD + r"\s+ABOVE\s+['\"]?([^\s,'\"\n\]]+)['\"]?", "greater_than"),
@@ -1516,22 +1502,7 @@ def _parse_task_constraints(task: str) -> List[Dict[str, Any]]:
             seen.add(key2)
             constraints.append({"field": field, "op": "not_equals", "value": val})
 
-    # Drop false positives from overlapping regexes (e.g. "field EQUALS" after "rating field")
-    _junk = frozenset({"field", "does", "less", "greater", "the", "a", "an"})
-    out: List[Dict[str, Any]] = []
-    seen2: set = set()
-    for c in constraints:
-        f = str(c.get("field") or "").lower()
-        if f in _junk:
-            continue
-        if f == "not" and c.get("op") in {"equals", "not_contains", "contains"}:
-            continue
-        k = (f, c.get("op"), str(c.get("value")))
-        if k in seen2:
-            continue
-        seen2.add(k)
-        out.append(c)
-    return out
+    return constraints
 
 
 def _format_constraints_block(constraints: List[Dict[str, Any]]) -> str:
@@ -1630,6 +1601,8 @@ def _classify_task(task: str) -> str:
     if re.search(r"(previous|go\s+back\s+to\s+the\s+previous)\s+page\s+of\s+emails", t, re.IGNORECASE):
         return "EMAILS_PREV_PAGE"
     if re.search(r"(clear|deselect)\s+all\s+selected\s+emails", t, re.IGNORECASE):
+        return "CLEAR_SELECTION"
+    if re.search(r"clear\s+the\s+current\s+selection(\s+of\s+emails)?", t, re.IGNORECASE):
         return "CLEAR_SELECTION"
     if re.search(r"send\s+.*using\s+the\s+template", t, re.IGNORECASE):
         return "TEMPLATE_SENT"
@@ -1753,12 +1726,24 @@ def _classify_task(task: str) -> str:
         return "VIEW_HIDDEN_POSTS"
     if re.search(r"search\s+for\s+jobs\s+where\s+the\s+query", t, re.IGNORECASE):
         return "SEARCH_JOBS"
+    if re.search(r"view\s+the\s+job\s+details\s+where", t, re.IGNORECASE):
+        return "VIEW_JOB"
     if re.search(r"apply\s+for\s+(a\s+)?job", t, re.IGNORECASE):
         return "APPLY_FOR_JOB"
     if re.search(r"edit\s+profile\s+to\s+set\s+the\s+bio", t, re.IGNORECASE):
         return "EDIT_PROFILE_BIO"
 
     # ---- AutoHire (8009) ----
+    if re.search(
+        r"(user\s+)?clicks?\s+['\"]?hire\s+later['\"]?\s+from\s+the\s+navbar|navbar.*hire\s+later",
+        t,
+        re.IGNORECASE,
+    ):
+        return "NAVBAR_HIRE_LATER_CLICK"
+    if re.search(r"contact\s+an\s+expert\s+where", t, re.IGNORECASE):
+        return "CONTACT_EXPERT_OPENED"
+    if re.search(r"confirm\s+hiring\s+of\s+(a\s+)?consultation", t, re.IGNORECASE):
+        return "HIRE_CONSULTANT"
     if re.search(r"decide\s+to\s+remove\s+expert\s+from\s+hire\s+later", t, re.IGNORECASE):
         return "HIRE_LATER_REMOVED"
     if re.search(r"decide\s+to\s+hire\s+later", t, re.IGNORECASE):
@@ -1803,7 +1788,7 @@ def _classify_task(task: str) -> str:
         return "PAYMENT_METHOD_SELECTED"
     if re.search(r"(reserve|book)\s+the\s+hotel", t, re.IGNORECASE):
         return "RESERVE_HOTEL"
-    if re.search(r"share\s+the\s+hotel\s+listing", t, re.IGNORECASE):
+    if re.search(r"share\s+the\s+hotel\s+(listing|with)", t, re.IGNORECASE):
         return "SHARE_HOTEL"
     if re.search(r"show\s+(me\s+)?details\s+for\s+popular\s+hotels", t, re.IGNORECASE):
         return "POPULAR_HOTELS_VIEWED"
@@ -1813,7 +1798,11 @@ def _classify_task(task: str) -> str:
         return "SUBMIT_REVIEW"
     if re.search(r"add\s+to\s+wishlist.*hotel", t, re.IGNORECASE):
         return "ADD_TO_WISHLIST_HOTEL"
-    if re.search(r"apply.*filter.*hotel|show\s+details\s+for\s+hotels", t, re.IGNORECASE):
+    if re.search(
+        r"apply.*filter.*hotel|show\s+details\s+for\s+hotels|hotels\s+with\s+a\s+rating",
+        t,
+        re.IGNORECASE,
+    ):
         return "APPLY_FILTERS"
 
     # ---- AutoDelivery (8006) ----
@@ -1845,7 +1834,7 @@ def _classify_task(task: str) -> str:
     # ---- AutoRestaurant (8003) ----
     if re.search(r"search\s+for\s+restaurants?\s+where\s+the\s+query", t, re.IGNORECASE):
         return "SEARCH_RESTAURANT"
-    if re.search(r"please\s+collapse\s+the\s+menu", t, re.IGNORECASE):
+    if re.search(r"(please\s+)?collapse\s+the\s+(expanded\s+)?menu(\s+view)?", t, re.IGNORECASE):
         return "COLLAPSE_MENU"
     if re.search(r"click\s+the\s+contact\s+card\s+where", t, re.IGNORECASE):
         return "CONTACT_CARD_CLICK"
@@ -1865,11 +1854,11 @@ def _classify_task(task: str) -> str:
         return "HELP_VIEWED"
     if re.search(r"click\s+on\s+the\s+feature.*on\s+the\s+about\s+page", t, re.IGNORECASE):
         return "ABOUT_FEATURE_CLICK"
-    if re.search(r"contact\s+support\s+regarding", t, re.IGNORECASE):
+    if re.search(r"contact\s+support\s+(regarding|where)", t, re.IGNORECASE):
         return "CONTACT_FORM_SUBMIT"
     if re.search(r"view\s+the\s+details\s+of\s+a\s+restaurant", t, re.IGNORECASE):
         return "VIEW_RESTAURANT"
-    if re.search(r"show\s+details\s+for\s+a\s+restaurant", t, re.IGNORECASE):
+    if re.search(r"show\s+details\s+for\s+(a|the)\s+restaurant", t, re.IGNORECASE):
         return "VIEW_RESTAURANT"
 
     # ---- AutoShop (8002) ----
@@ -1883,7 +1872,11 @@ def _classify_task(task: str) -> str:
         return "ITEM_INCREMENTED"
     if re.search(r"show\s+details\s+for\s+a\s+product", t, re.IGNORECASE):
         return "VIEW_DETAIL"
-    if re.search(r"filter\s+to\s+show\s+only\s+products\s+in\s+the\s+category", t, re.IGNORECASE):
+    if re.search(
+        r"filter\s+to\s+show\s+only\s+products\s+in\s+the\s+category|filter\s+to\s+category",
+        t,
+        re.IGNORECASE,
+    ):
         return "CATEGORY_FILTER"
     if re.search(r"(show\s+me\s+my\s+saved\s+items|my\s+wishlist|show.*wishlist)", t, re.IGNORECASE):
         return "VIEW_WISHLIST"
@@ -1893,7 +1886,7 @@ def _classify_task(task: str) -> str:
         return "ORDER_COMPLETED"
     if re.search(r"scroll\s+(left|right)\s+in\s+the\s+carousel", t, re.IGNORECASE):
         return "CAROUSEL_SCROLL"
-    if re.search(r"share\s+the\s+link\s+to\s+a\s+product", t, re.IGNORECASE):
+    if re.search(r"share\s+the\s+link\s+(to|for)\s+a\s+product", t, re.IGNORECASE):
         return "SHARE_PRODUCT"
     if re.search(r"add.*this.*item.*to.*cart", t, re.IGNORECASE):
         return "ADD_TO_CART"
@@ -1907,7 +1900,7 @@ def _classify_task(task: str) -> str:
         return "ADD_CLIENT"
     if re.search(r"add\s+a\s+new\s+matter", t, re.IGNORECASE):
         return "ADD_NEW_MATTER"
-    if re.search(r"search\s+for\s+matters?\s+where\s+the\s+query", t, re.IGNORECASE):
+    if re.search(r"search\s+for\s+matters?\s+where\s+the\s+(query|title)", t, re.IGNORECASE):
         return "SEARCH_MATTER"
     if re.search(r"show\s+me\s+details\s+for\s+clients?\s+whose", t, re.IGNORECASE):
         return "FILTER_CLIENTS"
@@ -1954,8 +1947,6 @@ def _classify_task(task: str) -> str:
         return "ADD_COMMENT_BOOK"
     if re.search(r"open\s+preview\s+of\s+a\s+book", t, re.IGNORECASE):
         return "OPEN_PREVIEW"
-    if re.search(r"edit\s+your\s+profile\s+so\s+that\s+the\s+username", t, re.IGNORECASE):
-        return "EDIT_USER_BOOK"
 
     # ---- AutoCinema (8000) specific ----
     if re.search(r"add\s+(to\s+)?watchlist", t, re.IGNORECASE):
@@ -1970,6 +1961,8 @@ def _classify_task(task: str) -> str:
         return "FILM_DETAIL"
     if re.search(r"search\s+for\s+(a\s+)?movie\s+where\s+the\s+query", t, re.IGNORECASE):
         return "SEARCH_FILM"
+    if re.search(r"filter\s+movies?\s+released|filter\s+movies?\s+.*\byear\b", t, re.IGNORECASE):
+        return "FILTER_FILM"
 
     # ---- AutoShop (8002) additional ----
     if re.search(r"click\s+on\s+buy\s+now\s+to\s+initiate\s+checkout", t, re.IGNORECASE):
@@ -1984,8 +1977,6 @@ def _classify_task(task: str) -> str:
         return "TIME_DROPDOWN_OPENED"
     if re.search(r"(retrieve\s+details\s+of\s+a\s+contact\s+form|submit.*contact.*form.*email.*contains)", t, re.IGNORECASE):
         return "CONTACT_FORM_SUBMIT"
-    if re.search(r"complete\s+my\s+restaurant\s+reservation", t, re.IGNORECASE):
-        return "RESERVATION_COMPLETE"
 
     # ---- AutoDoc (8004) additional ----
     if re.search(r"(retrieve|show)\s+details\s+of\s+billing\s+(entries|records)|billing\s+entries\s+where", t, re.IGNORECASE):
@@ -1998,8 +1989,8 @@ def _classify_task(task: str) -> str:
         return "VIEW_CLIENT_DETAILS"
     if re.search(r"(retrieve|show)\s+details\s+(of|for)\s+(the\s+)?matter\s+(whose|where)", t, re.IGNORECASE):
         return "VIEW_MATTER_DETAILS"
-    if re.search(r"delete\s+the\s+matter\s+where", t, re.IGNORECASE):
-        return "DELETE_MATTER"
+    if re.search(r"rename\s+the\s+document", t, re.IGNORECASE):
+        return "DOCUMENT_RENAMED"
 
     # ---- AutoMail (8005) additional ----
     if re.search(r"add\s+a\s+label\s+to\s+the\s+email\s+where", t, re.IGNORECASE):
@@ -2008,8 +1999,6 @@ def _classify_task(task: str) -> str:
         return "SEND_EMAIL"
     if re.search(r"search\s+for\s+emails?\s+where\s+the\s+query", t, re.IGNORECASE):
         return "SEARCH_EMAIL"
-    if re.search(r"cancel\s+the\s+template\s+where", t, re.IGNORECASE):
-        return "TEMPLATE_CANCELED"
 
     # ---- AutoDelivery (8006) additional ----
     if re.search(r"delete\s+the\s+review\s+for\s+the\s+restaurant", t, re.IGNORECASE):
@@ -2032,18 +2021,24 @@ def _classify_task(task: str) -> str:
         return "EDIT_CHECK_IN_OUT_DATES"
     if re.search(r"open\s+my\s+wishlist\s+to\s+view\s+saved\s+hotels", t, re.IGNORECASE):
         return "WISHLIST_OPENED"
+    if re.search(r"show\s+me\s+the\s+wishlist\s+so\s+i\s+can\s+view", t, re.IGNORECASE):
+        return "WISHLIST_OPENED"
+    if re.search(r"remove\s+from\s+my\s+wishlist", t, re.IGNORECASE):
+        return "REMOVE_FROM_WISHLIST"
 
     # ---- AutoConnect (8008) additional ----
     if re.search(r"open\s+the\s+jobs?\s+tab\s+from\s+the\s+navbar", t, re.IGNORECASE):
         return "JOBS_NAVBAR"
     if re.search(r"edit\s+profile\s+information", t, re.IGNORECASE):
         return "EDIT_PROFILE"
+    if re.search(r"edit\s+profile\s+where", t, re.IGNORECASE):
+        return "EDIT_PROFILE"
+    if re.search(r"edit\s+profile\s+for\s+the\s+user\s+whose", t, re.IGNORECASE):
+        return "EDIT_PROFILE"
     if re.search(r"post\s+a\s+status\s+update", t, re.IGNORECASE):
         return "POST_STATUS"
-    if re.search(r"add\s+experience\s+with\s+a\s+duration", t, re.IGNORECASE):
-        return "ADD_EXPERIENCE"
-    if re.search(r"unhide\s+the\s+post\s+where", t, re.IGNORECASE):
-        return "UNHIDE_POST"
+    if re.search(r"remove\s+post\s+where", t, re.IGNORECASE):
+        return "REMOVE_POST"
 
     # ---- AutoHire (8009) additional ----
     if re.search(r"edit\s+profile\s+title\s+where", t, re.IGNORECASE):
@@ -2060,10 +2055,6 @@ def _classify_task(task: str) -> str:
         return "SUBMIT_JOB"
     if re.search(r"decide\s+to\s+start\s+hiring", t, re.IGNORECASE):
         return "HIRE_LATER_START"
-    if re.search(r"select\s+a\s+budget\s+type\s+where", t, re.IGNORECASE):
-        return "CHOOSE_BUDGET_TYPE"
-    if re.search(r"write\s+a\s+job\s+description", t, re.IGNORECASE):
-        return "WRITE_JOB_DESCRIPTION"
 
     # ---- AutoCalendar (8010) additional ----
     if re.search(r"select\s+the\s+calendar\s+that\s+contains", t, re.IGNORECASE):
@@ -2076,8 +2067,8 @@ def _classify_task(task: str) -> str:
     # ---- AutoList (8011) additional ----
     if re.search(r"complete\s+task\s+where\s+the\s+name\s+equals", t, re.IGNORECASE):
         return "AUTOLIST_COMPLETE_TASK"
-    if re.search(r"(option\s+to\s+add\s+a\s+new\s+team|show\s+me.*add.*new\s+team)", t, re.IGNORECASE):
-        return "AUTOLIST_ADD_TEAM_CLICKED"
+    if re.search(r"(please\s+)?set\s+the\s+date\s+for\s+the\s+task\s+to", t, re.IGNORECASE):
+        return "AUTOLIST_SELECT_DATE_FOR_TASK"
 
     # ---- AutoRide (8012) additional ----
     if re.search(r"view\s+trip\s+details\s+for\s+(a\s+)?(trip|ride)\s+where", t, re.IGNORECASE):
@@ -2120,6 +2111,40 @@ def _classify_task(task: str) -> str:
         return "LOGIN_THEN_EDIT_PROFILE"
     if re.search(r"\b(purchase|buy|checkout|order)\b", t) and re.search(r"\b(login|sign.?in|authenticate)\b", t):
         return "LOGIN_THEN_PURCHASE"
+
+    # ---- AutoSubnet (8014) / AutoVoice (8015) ----
+    if re.search(r"show\s+details\s+for\s+a\s+subnet\s+where", t, re.IGNORECASE):
+        return "VIEW_SUBNET"
+    if re.search(r"show\s+details\s+for\s+a\s+block\s+where", t, re.IGNORECASE):
+        return "VIEW_BLOCK"
+    if re.search(
+        r"give\s+me\s+information\s+about\s+a\s+subnet|subnet_name\s+equals.*favorites|favorite.*subnet",
+        t,
+        re.IGNORECASE,
+    ):
+        return "FAVORITE_SUBNET"
+    if re.search(r"create\s+a\s+server\s+where", t, re.IGNORECASE):
+        return "CREATE_SERVER"
+    if re.search(
+        r"click\s+the\s+home\s+icon.*server|view\s+the\s+server\s+list",
+        t,
+        re.IGNORECASE,
+    ):
+        return "VIEW_SERVERS"
+
+    # ---- AutoDelivery (8006) missing ----
+    if re.search(r"reorder\s+the\s+recent\s+item", t, re.IGNORECASE):
+        return "QUICK_REORDER"
+    if re.search(r"show\s+details\s+for\s+editing\s+a\s+cart\s+item", t, re.IGNORECASE):
+        return "EDIT_CART_ITEM"
+
+    # ---- AutoDoc (8004) missing ----
+    if re.search(r"delete\s+the\s+matter\s+where", t, re.IGNORECASE):
+        return "DELETE_MATTER"
+
+    # ---- AutoMail (8005) missing ----
+    if re.search(r"create\s+a\s+new\s+label", t, re.IGNORECASE):
+        return "CREATE_LABEL"
 
     # ---- Task management ----
     if re.search(r"delete\s+task\b", t, re.IGNORECASE):
@@ -2164,95 +2189,6 @@ def _classify_task(task: str) -> str:
     return "GENERAL"
 
 
-_USECASE_PLAYBOOK_ALIASES: Dict[str, str] = {
-    "ADD_TO_READING_LIST": "LOGIN_THEN_LIST_ACTION",
-    "ADD_TO_WISHLIST": "LOGIN_THEN_LIST_ACTION",
-    "APPOINTMENT_BOOKED_SUCCESSFULLY": "REQUEST_QUICK_APPOINTMENT",
-    "AUTOLIST_SELECT_DATE_FOR_TASK": "AUTOLIST_TASK_ADDED",
-    "BACK_TO_ALL_HOTELS": "BACK_TO_ALL_JOBS",
-    "BOOK_FROM_WISHLIST": "RESERVE_HOTEL",
-    "BOOK_RESTAURANT": "LOGIN_THEN_PURCHASE",
-    "CREATE_LABEL": "GENERAL",
-    "DELETE_CLIENT": "LOGIN_THEN_DELETE_ITEM",
-    "DELETE_FILM": "LOGIN_THEN_DELETE_ITEM",
-    "EDIT_CART_ITEM": "QUANTITY_CHANGED",
-    "EDIT_USER": "LOGIN_THEN_EDIT_PROFILE",
-    "EMPTY_CART": "VIEW_CART",
-    "EVENT_ADD_REMINDER": "ADD_EVENT",
-    "EVENT_REMOVE_REMINDER": "CANCEL_ADD_EVENT",
-    "FILTER_FILM": "FILTER_ITEM",
-    "LOGOUT": "LOGIN_THEN_LOGOUT",
-    "LOG_DELETE": "LOGIN_THEN_DELETE_ITEM",
-    "NAVBAR_HIRE_LATER_CLICK": "GENERAL",
-    "NEW_LOG_ADDED": "GENERAL",
-    "OCCASION_SELECTED": "GENERAL",
-    "PLACE_ORDER": "LOGIN_THEN_PURCHASE",
-    "QUICK_HIRE": "GENERAL",
-    "QUICK_REORDER": "LOGIN_THEN_PURCHASE",
-    "REMOVE_FROM_CART_BOOK": "VIEW_CART",
-    "REMOVE_FROM_WATCHLIST": "LOGIN_THEN_LIST_ACTION",
-    "REMOVE_FROM_WISHLIST": "LOGIN_THEN_LIST_ACTION",
-    "REMOVE_POST": "GENERAL",
-    "SEARCH": "SEARCH_ITEM",
-    "SEARCH_CLIENT": "SEARCH_ITEM",
-    "SELECT_TODAY": "SELECT_DATE",
-    "SET_RATE_RANGE": "FILTER_ITEM",
-    "SHARE_BOOK": "SHARE_ITEM",
-    "UPDATE_MATTER": "LOGIN_THEN_EDIT_ITEM",
-    "VIEW_FULL_MENU": "COLLAPSE_MENU",
-    "VIEW_HOTEL": "NAVIGATE_DETAIL",
-    "VIEW_USER_PROFILE": "EDIT_PROFILE",
-}
-
-
-def _resolve_task_type(task: str, eval_type: str = "") -> str:
-    et = (eval_type or "").strip().upper()
-    if et:
-        if et in _TASK_PLAYBOOKS:
-            return et
-        aliased = _USECASE_PLAYBOOK_ALIASES.get(et, "")
-        if aliased and aliased in _TASK_PLAYBOOKS:
-            return aliased
-    return _classify_task(task)
-
-
-def _fallback_playbook_from_eval_type(eval_type: str) -> str:
-    et = (eval_type or "").strip().upper()
-    if not et:
-        return _TASK_PLAYBOOKS["GENERAL"]
-    if et.startswith(("SEARCH_", "FIND_")):
-        return (
-            "PLAYBOOK: 1) Find the relevant search/filter control. "
-            "2) Apply ALL TASK_CONSTRAINTS. "
-            "3) Open the matching item and complete the requested action."
-        )
-    if et.startswith(("VIEW_", "OPEN_")):
-        return (
-            "PLAYBOOK: 1) Locate the row/card matching ALL TASK_CONSTRAINTS. "
-            "2) Open details/modal/page for that exact item."
-        )
-    if et.startswith(("ADD_", "CREATE_")):
-        return (
-            "PLAYBOOK: 1) Open add/create form or modal. "
-            "2) Fill fields exactly from TASK_CONSTRAINTS. "
-            "3) Submit/save."
-        )
-    if et.startswith(("EDIT_", "UPDATE_")):
-        return (
-            "PLAYBOOK: 1) Find the matching item first. "
-            "2) Open edit form/modal. "
-            "3) Update fields exactly per TASK_CONSTRAINTS. "
-            "4) Save."
-        )
-    if et.startswith(("DELETE_", "REMOVE_")):
-        return (
-            "PLAYBOOK: 1) Find the matching item first. "
-            "2) Click delete/remove for that item only. "
-            "3) Confirm if a confirmation dialog appears."
-        )
-    return _TASK_PLAYBOOKS["GENERAL"]
-
-
 _TASK_PLAYBOOKS: Dict[str, str] = {
     "REGISTRATION": (
         "PLAYBOOK: 1) Navigate to register/signup page. "
@@ -2287,10 +2223,10 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "4) Type the comment text. 5) Submit."
     ),
     "LOGIN_THEN_ADD_ITEM": (
-        "PLAYBOOK: 1) Login (navigate to login, fill credentials, submit). "
-        "2) Navigate to admin or add-item page (look for Admin/Add Film/Add Book in nav). "
-        "3) Fill ALL fields with EXACT values from task. "
-        "4) Submit."
+        "PLAYBOOK: 1) Login: use EXACT username/password from task (e.g., 'user ' with trailing space, 'Passw0rd!'). "
+        "2) On AutoCinema: open Admin or 'Add Film' / Add Movie from nav after login. "
+        "3) Fill form: genres equals 'Western' (or task value), title/year as required. "
+        "4) Submit to register the movie."
     ),
     "LOGIN_THEN_EDIT_ITEM": (
         "PLAYBOOK: 1) Login. "
@@ -2343,28 +2279,25 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "3) Click it."
     ),
     "FILM_DETAIL": (
-        "PLAYBOOK: 1) On AutoCinema, browse or filter the movie list. "
-        "2) Find ONE movie satisfying EVERY constraint (e.g. genres CONTAINS X, rating EQUALS Y, duration < Z). "
-        "Use visible_text/search_text if needed. 3) Click that movie to open its detail page."
+        "PLAYBOOK: 1) On AutoCinema, browse the movie list. "
+        "2) Find a movie matching ALL TASK_CONSTRAINTS (genres NOT CONTAIN, duration GREATER EQUAL, etc.). "
+        "3) Click on that movie to open its detail page."
     ),
     "SEARCH_FILM": (
         "PLAYBOOK: 1) On AutoCinema, find the search bar. "
         "2) Type a movie title that is NOT the excluded term from the NOT constraint. "
         "3) Submit the search."
     ),
+    "FILTER_FILM": (
+        "PLAYBOOK: 1) On AutoCinema, find the year filter, genre filter, or 'Filter' / sidebar controls on the films list. "
+        "2) Set the year to the value from TASK_CONSTRAINTS (e.g., released in '1994' → select or type 1994). "
+        "3) Apply the filter (Apply button or automatic). "
+        "4) Verify the list shows movies for that year."
+    ),
     "OPEN_PREVIEW": (
         "PLAYBOOK: 1) Navigate to the specific book detail page. "
         "2) Find the 'Open Preview' or 'Preview' button. "
         "3) Click it."
-    ),
-    "EDIT_USER_BOOK": (
-        "PLAYBOOK: 1) On AutoBooks, login using any available credentials (username/password may be blank or space). "
-        "2) After login, go to Profile/Account settings. "
-        "3) Edit the profile: set username equals the specified value (e.g. ' '), "
-        "   set password equals the specified value, "
-        "   set location to a value NOT containing the excluded string (e.g. NOT 'Paris, France'), "
-        "   set website to a value NOT containing the excluded string (e.g. NOT 'z'). "
-        "4) Save the changes."
     ),
     "ADD_BOOK": (
         "PLAYBOOK: 1) On AutoBooks, login first if credentials provided. "
@@ -2396,8 +2329,9 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "4) Fill out purchase form. 5) Submit."
     ),
     "CONTACT": (
-        "PLAYBOOK: 1) Navigate to the Contact page (look for Contact in nav). "
-        "2) Fill in name, email, message fields with EXACT values from task. "
+        "PLAYBOOK: 1) Navigate to Contact (AutoCinema footer or nav). "
+        "2) Fill per TASK_CONSTRAINTS: message equals X → type exactly X; "
+        "   name NOT contains Y → type a name without Y; subject NOT contains Z → avoid Z in subject. "
         "3) Submit the form."
     ),
     "ADD_COMMENT": (
@@ -2576,9 +2510,11 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "4) Add them. Repeat if multiple members needed."
     ),
     "AUTOLIST_TEAM_ROLE_ASSIGNED": (
-        "PLAYBOOK: 1) Go to Team section. "
-        "2) Find a member whose name does NOT contain the excluded string. "
-        "3) Click their role dropdown. 4) Select a role containing 'r' (or as specified)."
+        "PLAYBOOK: 1) On AutoList, go to Team tab/section. "
+        "2) Find a team member whose name does NOT CONTAIN the excluded substring (TASK_CONSTRAINTS). "
+        "3) Open the role dropdown for that member. "
+        "4) Select a role that CONTAINS the required substring (e.g., contains 'c' → 'Product Manager' or 'Backend'). "
+        "5) Save/confirm if prompted."
     ),
     "AUTOLIST_EDIT_TASK_MODAL_OPENED": (
         "PLAYBOOK: 1) Browse task list. "
@@ -2589,10 +2525,13 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "PLAYBOOK: 1) Find the 'Add Task' button ('+' or 'Add Task' text). 2) Click it."
     ),
     "AUTOLIST_TASK_ADDED": (
-        "PLAYBOOK: 1) Click 'Add Task' button. "
-        "2) Fill in name = EXACT value, description = EXACT value, "
-        "date = satisfying constraint, priority = exact value. "
-        "3) Save."
+        "PLAYBOOK: 1) Click the 'Add Task' or '+' button to open the new task form. "
+        "2) Fill in form fields satisfying ALL TASK_CONSTRAINTS: "
+        "   - name: if 'NOT CONTAIN X' → type any name that does NOT include X "
+        "   - description: if 'NOT CONTAIN X' → type any description without X "
+        "   - date: if 'BEFORE X' → pick any date before X; if 'equals X' → pick exactly X "
+        "   - priority: if 'NOT Low' → choose High or Medium; if 'equals X' → choose exactly X. "
+        "3) Click Save/Submit to create the task."
     ),
     "AUTOLIST_DELETE_TASK": (
         "PLAYBOOK: 1) On AutoList, navigate to the Tasks section. "
@@ -2703,33 +2642,41 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "3) Click 'Withdraw' or 'Cancel Application'."
     ),
     "SEARCH_USERS": (
-        "PLAYBOOK: 1) Find the user search bar (People section or top search). "
-        "2) Type the query containing the given substring. 3) Submit."
+        "PLAYBOOK: 1) On AutoConnect, open People/Users or the user search in the nav. "
+        "2) If constraint is 'username contains X': type X (e.g., 'john_doe') in the search field. "
+        "3) Press Enter or click Search. "
+        "4) Verify results list updates."
     ),
     "BACK_TO_ALL_JOBS": (
-        "PLAYBOOK: 1) Navigate to Jobs section. "
-        "2) Find a job where location equals X, company NOT Y, title NOT contains Z. "
-        "3) Click on it. 4) Click 'Back to Jobs' breadcrumb/link."
+        "PLAYBOOK: 1) On AutoConnect, navigate to the Jobs section. "
+        "2) Find a job listing that satisfies ALL TASK_CONSTRAINTS "
+        "   (e.g., title NOT equals 'Operations Analyst' — avoid the excluded title). "
+        "3) Click on that job to open its detail page. "
+        "4) Find and click the 'Back to all jobs', '< Jobs', or breadcrumb back link "
+        "   to return to the full jobs list."
     ),
     "EDIT_PROFILE_BIO": (
         "PLAYBOOK: 1) Navigate to Profile/Settings. "
         "2) Find Bio field. 3) Set bio to EXACT value from task. 4) Save."
     ),
-    "ADD_EXPERIENCE": (
-        "PLAYBOOK: 1) On AutoConnect, navigate to your Profile page. "
-        "2) Find the Experience section and click 'Add Experience'. "
-        "3) Fill in: duration equals the specified period (e.g. 'Oct 2019 - Present • 6 yrs 3 mos'), "
-        "   title that is NOT the excluded value (e.g. NOT 'UX Researcher'), "
-        "   description that does NOT CONTAIN the excluded text (e.g. NOT 'zkw'). "
-        "4) Save the experience entry."
-    ),
-    "UNHIDE_POST": (
-        "PLAYBOOK: 1) On AutoConnect, navigate to Profile or Posts section. "
-        "2) Find hidden posts or the post manager. "
-        "3) Find the post whose content equals the specified text. "
-        "4) Click 'Unhide' or 'Show post' to make it visible again."
-    ),
     # ---- AutoHire (8009) ----
+    "NAVBAR_HIRE_LATER_CLICK": (
+        "PLAYBOOK: 1) On AutoHire, look at the top navbar. "
+        "2) Find 'Hire Later' link/tab (may be under Hires or similar). "
+        "3) Click it to open the saved 'hire later' experts list."
+    ),
+    "CONTACT_EXPERT_OPENED": (
+        "PLAYBOOK: 1) On AutoHire, browse the Experts list. "
+        "2) Find the expert where name and role match TASK_CONSTRAINTS (e.g., name equals, role equals). "
+        "3) Click 'Contact', 'Message', or similar on that expert's card to open the contact form/modal. "
+        "4) Task complete when the contact UI is open (submit only if the task asks to send)."
+    ),
+    "HIRE_CONSULTANT": (
+        "PLAYBOOK: 1) On AutoHire, start the hire flow on an expert matching ALL constraints "
+        "   (country, payment type, name NOT, role equals). "
+        "2) Click Hire Now / Confirm until a confirmation dialog appears. "
+        "3) Click Confirm / Yes to confirm hiring the consultation."
+    ),
     "HIRE_BTN_CLICKED": (
         "PLAYBOOK: 1) Browse expert/consultant list. "
         "2) Find expert matching ALL constraints (role contains X, country equals Y, name contains Z). "
@@ -2809,10 +2756,11 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "2) Click 'Add to Wishlist' or heart icon."
     ),
     "APPLY_FILTERS": (
-        "PLAYBOOK: 1) Find filter controls (region, rating, price range). "
-        "2) Set region/country to specified value. "
-        "3) Set rating filter as specified. "
-        "4) Apply the filter."
+        "PLAYBOOK: 1) On AutoLodge, find filter controls (region/country, rating, price). "
+        "2) Apply ALL TASK_CONSTRAINTS: e.g. rating less_equal 4 → set max rating to 4; "
+        "   region NOT 'Denmark' → choose any region other than Denmark (or exclude Denmark). "
+        "3) Click Apply / Search if needed. "
+        "4) Find a hotel listing that matches the filtered criteria and click it to open details."
     ),
     "PEOPLE_DROPDOWN_OPENED": (
         "PLAYBOOK: 1) Find the people/guest selector on the main booking/search form. "
@@ -2838,10 +2786,10 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "3) For 'contains X' → type exactly X as the query. 4) Submit."
     ),
     "DROPOFF_PREFERENCE": (
-        "PLAYBOOK: 1) Find the order matching constraints (quantity > X, restaurant equals Y). "
-        "2) Go to its cart/order page. "
-        "3) Find the dropoff/delivery preference selector. "
-        "4) Select an option NOT equal to the excluded one (e.g., NOT 'Text when arriving' → choose 'Hand it to me' or 'Leave at door')."
+        "PLAYBOOK: 1) On AutoDelivery, open Cart or the active order with quantity > X per TASK_CONSTRAINTS. "
+        "2) Find the dropoff / delivery preference dropdown (Meet in lobby, Hand it to me, Leave at door, etc.). "
+        "3) Select an option NOT equal to the excluded value (e.g., NOT 'Meet in the lobby' → pick another option). "
+        "4) Save/confirm if required."
     ),
     "DELIVERY_PRIORITY_SELECTED": (
         "PLAYBOOK: 1) Find the order matching constraints (preferences contains X, quantity NOT Y, price equals Z, restaurant equals W). "
@@ -2868,9 +2816,11 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "3) Submit search."
     ),
     "VIEW_RESTAURANT": (
-        "PLAYBOOK: 1) Browse restaurant cards. "
-        "2) Find restaurant matching constraints (cuisine NOT X, description equals Y, rating < Z). "
-        "3) Click to view."
+        "PLAYBOOK: 1) On AutoRestaurant, browse the restaurant listing cards. "
+        "2) Find the restaurant matching ALL TASK_CONSTRAINTS: "
+        "   - name equals X (click the one with that exact name) "
+        "   - OR cuisine NOT X, rating < Z, description equals Y — check all constraints. "
+        "3) Click on that restaurant card to open its detail/view page."
     ),
     "HELP_FAQ_TOGGLED": (
         "PLAYBOOK: 1) Navigate to Help/FAQ page. "
@@ -2886,15 +2836,20 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "3) Click on it."
     ),
     "CONTACT_FORM_SUBMIT": (
-        "PLAYBOOK: 1) Navigate to Contact page. "
-        "2) Fill: subject containing the required substring, plus other fields. "
-        "3) Submit."
+        "PLAYBOOK: 1) Navigate to Contact page (footer or nav 'Contact'). "
+        "2) Fill ALL fields per TASK_CONSTRAINTS: "
+        "   email equals X → type exactly X; "
+        "   subject NOT equals Y → type any subject different from Y; "
+        "   message does NOT contain Z → type a message without that substring. "
+        "3) Submit the form."
     ),
     # ---- AutoShop (8002) ----
     "CATEGORY_FILTER": (
-        "PLAYBOOK: 1) Find the category filter sidebar or dropdown. "
-        "2) Click the category that equals the specified value (e.g., 'technology'). "
-        "3) Products should filter."
+        "PLAYBOOK: 1) On AutoShop, find the category sidebar or 'Filter to category' control. "
+        "2) Click/select the category from TASK_CONSTRAINTS (e.g., 'Electronics'). "
+        "3) If the task also specifies a search query (e.g., 'smartphone'): find the product search bar, "
+        "   type that query exactly, press Enter or click Search. "
+        "4) Verify results match both category and search."
     ),
     "VIEW_WISHLIST": (
         "PLAYBOOK: 1) Find the Wishlist link/icon (often in nav or account menu). "
@@ -2912,8 +2867,10 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "2) Click the left '<' scroll button on that carousel."
     ),
     "SHARE_PRODUCT": (
-        "PLAYBOOK: 1) Find product matching constraints (brand contains X, price >= Y). "
-        "2) Click 'Share' button on it."
+        "PLAYBOOK: 1) On AutoShop, filter or browse to find the product matching ALL constraints "
+        "   (name equals X, category equals Y). "
+        "2) Open that product's detail page if needed. "
+        "3) Click Share / share icon and complete the share flow."
     ),
     # ---- AutoDoc (8004) ----
     "ADD_CLIENT": (
@@ -3104,9 +3061,12 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
     ),
     "QUANTITY_CHANGED": (
         "PLAYBOOK: 1) Navigate to the shopping cart (cart icon, top-right). "
-        "2) Find the item matching the title constraint (title equals X or NOT 'Y'). "
-        "3) Find the quantity input/stepper for that item. "
-        "4) Change the quantity to the specified new_quantity value. "
+        "2) Find the item matching the title constraint (title equals X or title NOT CONTAIN 'Y'). "
+        "3) Find the quantity input/stepper (+/- buttons or number field) for that item. "
+        "4) Set the quantity to satisfy the new_quantity constraint: "
+        "   - if 'new_quantity equals X': set to exactly X "
+        "   - if 'new_quantity less_equal X' or '3 or less': set to X or any smaller valid number "
+        "   - if 'new_quantity greater_equal X': set to X or higher. "
         "5) Confirm/update the cart."
     ),
     "ITEM_INCREMENTED": (
@@ -3133,10 +3093,13 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "3) Navigate to the hidden posts section to view them."
     ),
     "SEARCH_JOBS": (
-        "PLAYBOOK: 1) On AutoConnect, find the Jobs section (via navbar or search). "
-        "2) Find the search/filter input for jobs. "
-        "3) Type a search query that does NOT contain the excluded term (from NOT CONTAIN constraint). "
-        "4) Submit the search."
+        "PLAYBOOK: 1) On AutoConnect, find the Jobs section (click 'Jobs' in the navbar). "
+        "2) Find the search input/bar for jobs. "
+        "3) Determine the query from TASK_CONSTRAINTS: "
+        "   - if 'query NOT equals X': type any search term that is DIFFERENT from X "
+        "   - if 'query equals X': type exactly X "
+        "   - if 'query contains X': type exactly X. "
+        "4) Press Enter or click Search to submit."
     ),
     "APPLY_FOR_JOB": (
         "PLAYBOOK: 1) On AutoConnect (jobs site), browse the job listings. "
@@ -3144,6 +3107,11 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "   - job_title NOT CONTAIN excluded term, company NOT CONTAIN excluded term, etc. "
         "3) Click on that job listing to open its detail page. "
         "4) Find and click the 'Apply' button to apply for the job."
+    ),
+    "VIEW_JOB": (
+        "PLAYBOOK: 1) On AutoConnect Jobs, browse or search listings. "
+        "2) Find the job where title contains X and location equals Y (TASK_CONSTRAINTS). "
+        "3) Click that job row/card to open the job detail page."
     ),
     # ---- AutoMail (8005) ----
     "MARK_AS_SPAM": (
@@ -3156,11 +3124,13 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "5) Click it."
     ),
     "MARK_AS_UNREAD": (
-        "PLAYBOOK: 1) Find the email matching ALL constraints: "
-        "   - from_email equals the given address "
-        "   - is_read equals False (already unread? - still find it). "
-        "2) Open the email or right-click/use menu. "
-        "3) Click 'Mark as Unread' option."
+        "PLAYBOOK: 1) Browse the inbox email list. "
+        "2) Find the email matching ALL constraints: "
+        "   - is_read equals False means the email may already be unread — still perform the action "
+        "   - from_email does NOT equal the excluded address "
+        "   - subject does NOT equal the excluded subject. "
+        "3) Click on that email to open it, OR right-click / use the 3-dot menu on that email row. "
+        "4) Find and click 'Mark as Unread' option in the menu/toolbar."
     ),
     "VIEW_EMAIL": (
         "PLAYBOOK: 1) Browse the email list. "
@@ -3175,12 +3145,10 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
     ),
     # ---- AutoLodge (8007) ----
     "SHARE_HOTEL": (
-        "PLAYBOOK: 1) Browse hotel listings on AutoLodge. "
-        "2) Find the hotel matching ALL constraints: location, host_name NOT contains, price > X, "
-        "   title NOT contains, amenities include Y, guests > Z. "
-        "3) Click on that hotel card. "
-        "4) Find the Share button on the hotel detail page. "
-        "5) Enter the recipient email address and send/share."
+        "PLAYBOOK: 1) On AutoLodge, browse listings and open a hotel detail page (or one matching constraints if listed). "
+        "2) Click Share / share icon on the detail page. "
+        "3) If form asks for email: type the EXACT email from TASK_CONSTRAINTS (e.g., friend@example.com). "
+        "4) Submit/confirm share."
     ),
     "POPULAR_HOTELS_VIEWED": (
         "PLAYBOOK: 1) On AutoLodge, look for a 'Popular Hotels' or 'Featured' section. "
@@ -3225,10 +3193,13 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
     ),
     # ---- AutoRestaurant (8003) ----
     "COLLAPSE_MENU": (
-        "PLAYBOOK: 1) Browse restaurants on AutoRestaurant. "
-        "2) Find the restaurant matching constraints (rating NOT X, bookings equals Y, name NOT Z). "
-        "3) Click on that restaurant to view its menu. "
-        "4) Find the expanded menu section with a collapse/hide toggle. "
+        "PLAYBOOK: 1) On AutoRestaurant, browse the restaurant list. "
+        "2) Find the restaurant matching ALL TASK_CONSTRAINTS: "
+        "   - rating satisfies the constraint (e.g., GREATER THAN 3.5 or LESS EQUAL 5.4) "
+        "   - name does NOT CONTAIN the excluded substring "
+        "   - number of bookings satisfies the constraint if specified. "
+        "3) Click on that restaurant card to expand / open its menu view. "
+        "4) Look for a collapse/hide button (^ arrow, 'Collapse', or similar) on the expanded menu. "
         "5) Click it to collapse the menu."
     ),
     "CONTACT_CARD_CLICK": (
@@ -3251,9 +3222,10 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
     ),
     # ---- AutoDoc (8004) ----
     "SEARCH_MATTER": (
-        "PLAYBOOK: 1) On AutoDoc, find the Matters search bar/input. "
-        "2) Type a search query that does NOT contain the excluded term. "
-        "3) Submit the search to find matching matters."
+        "PLAYBOOK: 1) On AutoDoc, navigate to Matters and find the search/filter input. "
+        "2) If constraint is 'title contains X': type X (e.g., 'Estate') in the title or search field. "
+        "3) If constraint is 'query NOT X': type any query that does NOT include the excluded term. "
+        "4) Submit / apply search and view matching matters."
     ),
     "FILTER_CLIENTS": (
         "PLAYBOOK: 1) On AutoDoc Clients page, find filter/search options. "
@@ -3266,11 +3238,19 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "3) Apply/submit the filter."
     ),
     "DOCUMENT_DELETED": (
-        "PLAYBOOK: 1) Navigate to Documents section on AutoDoc. "
-        "2) Find the document matching constraints: status NOT CONTAINS X, size > Y. "
-        "3) Select/click that document. "
-        "4) Find the Delete/Remove button and click it. "
-        "5) Confirm deletion."
+        "PLAYBOOK: 1) On AutoDoc, navigate to the Documents section. "
+        "2) Find the document matching ALL TASK_CONSTRAINTS: "
+        "   status equals X, size greater_equal Y KB, name NOT equals Z, version NOT equals W. "
+        "3) If the task says 'retrieve details' or 'show details': click on the document to view it. "
+        "4) If the task says 'delete': click the Delete/trash icon on the document, then confirm. "
+        "Read the task prompt carefully to determine which action is needed."
+    ),
+    "DOCUMENT_RENAMED": (
+        "PLAYBOOK: 1) On AutoDoc, open Documents. "
+        "2) Find the document whose current name equals the 'from' name in the task (e.g., 'Retainer-Agreement.pdf'). "
+        "3) Click Rename / pencil / three-dot menu → Rename. "
+        "4) Type the new filename EXACTLY (e.g., 'Retainer-Agreement-final.pdf'). "
+        "5) Confirm/Save."
     ),
     # ---- AutoMedic (8013) ----
     "DOCTOR_CONTACTED_SUCCESSFULLY": (
@@ -3379,16 +3359,17 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "4) Ensure the detail/info page is fully visible."
     ),
     "FILTER_BOOK": (
-        "PLAYBOOK: 1) On AutoBooks, find the filter/genre dropdown or filter panel. "
-        "2) Select the genre specified: genres equals 'Dystopian' means select 'Dystopian'. "
-        "3) Apply the filter. "
-        "4) Verify filtered results appear."
+        "PLAYBOOK: 1) On AutoBooks, find the filter/genre panel (look for Genre dropdown, Year/date filters). "
+        "2) Select the genre that satisfies the constraint (e.g., genres equals 'War' → select 'War'). "
+        "3) If a year filter is available and the constraint includes year "
+        "   (e.g., 'year >= 1999'): set the From Year to 1999 or enter the year value. "
+        "4) Apply/submit the filter and verify the filtered results appear."
     ),
     "SEARCH_BOOK": (
         "PLAYBOOK: 1) On AutoBooks, find the search bar. "
         "2) Type the exact query from TASK_CONSTRAINTS (e.g. 'Harry Potter and the Chamber of Secrets'). "
         "3) Press Enter or click Search. "
-        "4) Verify search results appear."
+        "4) Verify search results appear."`
     ),
     "LOGIN_BOOK": (
         "PLAYBOOK: 1) On AutoBooks, click Login. "
@@ -3422,10 +3403,13 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "3) Verify the About page content is visible."
     ),
     "DATE_DROPDOWN_OPENED": (
-        "PLAYBOOK: 1) On AutoRestaurant, find the date/time reservation selector. "
-        "2) Click on the date selector to open the dropdown. "
-        "3) Select a date satisfying the constraint (less_equal given date). "
-        "4) Confirm selection."
+        "PLAYBOOK: 1) On AutoRestaurant, find the date/time reservation selector on the booking form. "
+        "2) Click on the date selector to open the dropdown/calendar. "
+        "3) Read the constraint carefully: "
+        "   - if 'equals X': select EXACTLY that date (e.g., '2026-03-27') "
+        "   - if 'less_equal X' or 'on or before X': select any date on or before X "
+        "   - if 'NOT equals X': select any date that is NOT X. "
+        "4) Click to select the correct date and confirm the selection."
     ),
     "TIME_DROPDOWN_OPENED": (
         "PLAYBOOK: 1) On AutoRestaurant, find the time selection dropdown. "
@@ -3433,22 +3417,10 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "3) Select the time that equals the specified value (e.g. '1:00 PM'). "
         "4) Confirm selection."
     ),
-    "RESERVATION_COMPLETE": (
-        "PLAYBOOK: 1) On AutoRestaurant, browse the restaurant list. "
-        "2) Find a restaurant matching ALL TASK_CONSTRAINTS: "
-        "   reviews GREATER THAN the specified count, rating NOT equals excluded value, "
-        "   bookings NOT equals excluded value, code NOT equals excluded code. "
-        "3) Click on that restaurant to open its reservation page. "
-        "4) Fill in reservation form: occasion equals the specified occasion (e.g. 'birthday'), "
-        "   phone equals the specified number (e.g. '555-1234'), "
-        "   date equals the specified date/time. "
-        "5) Submit/confirm the reservation."
-    ),
     "CONTACT_FORM_SUBMIT": (
-        "PLAYBOOK: 1) On AutoRestaurant, navigate to the Contact page. "
-        "2) Fill in: email CONTAINS 'olivia.brown@' (or exact), username NOT CONTAINS 'Olivia'. "
-        "3) Fill any remaining fields. "
-        "4) Submit the contact form."
+        "PLAYBOOK: 1) On AutoRestaurant (or site Contact page), open Contact. "
+        "2) Fill fields per TASK_CONSTRAINTS: email exact, subject NOT / message NOT as specified. "
+        "3) Submit the contact form."
     ),
     # ---- AutoDoc (8004) additional ----
     "BILLING_SEARCH": (
@@ -3483,22 +3455,7 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "3) Click on that matter to open its detail page. "
         "4) Ensure matter details are visible."
     ),
-    "DELETE_MATTER": (
-        "PLAYBOOK: 1) On AutoDoc, navigate to the Matters section. "
-        "2) Find the matter matching ALL TASK_CONSTRAINTS: "
-        "   status equals 'Pending', name NOT contains X, etc. "
-        "3) Click the Delete / Remove button for that matter. "
-        "4) Confirm deletion if prompted."
-    ),
     # ---- AutoMail (8005) additional ----
-    "TEMPLATE_CANCELED": (
-        "PLAYBOOK: 1) On AutoMail, navigate to Templates section (usually in settings or sidebar). "
-        "2) Find the template matching ALL TASK_CONSTRAINTS: "
-        "   template_name NOT equals excluded name, subject CONTAINS required text, "
-        "   body NOT CONTAINS excluded text, to field NOT equals excluded address. "
-        "3) Click Cancel/Delete on that template. "
-        "4) Confirm cancellation if prompted."
-    ),
     "SEND_EMAIL": (
         "PLAYBOOK: 1) On AutoMail, click Compose/New Email. "
         "2) In the To/recipient field, type the address from the task (e.g. 'recipient@example.com'). "
@@ -3532,10 +3489,11 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "4) Add that item to cart."
     ),
     "ADD_TO_CART_MODAL_OPEN": (
-        "PLAYBOOK: 1) On AutoDelivery, find the restaurant and menu item matching constraints. "
-        "   price <= X, item equals 'Chef's Special', restaurant equals 'Candlenut'. "
-        "2) Click on that item to open the add-to-cart modal. "
-        "3) The modal should be visible - set quantity/size if needed."
+        "PLAYBOOK: 1) On AutoDelivery, find the restaurant whose name equals the 'restaurant' constraint from TASK_CONSTRAINTS. "
+        "2) Click on that restaurant to view its menu. "
+        "3) Browse menu items and find one where price satisfies the price constraint (e.g., price <= X). "
+        "4) Click on that menu item to open the add-to-cart modal. "
+        "5) The modal should now be open and visible."
     ),
     "QUICK_ORDER_STARTED": (
         "PLAYBOOK: 1) On AutoDelivery, look for a 'Quick Order' button on any restaurant card. "
@@ -3577,11 +3535,12 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "3) Verify the jobs listing page is visible."
     ),
     "EDIT_PROFILE": (
-        "PLAYBOOK: 1) On AutoConnect, navigate to your Profile (click avatar or 'My Profile'). "
+        "PLAYBOOK: 1) On AutoConnect, open Profile: click your avatar or 'My Profile' / 'View Profile'. "
         "2) Click Edit Profile / pencil icon. "
-        "3) Find the bio/about field. "
-        "4) If constraint is bio NOT CONTAIN 'X': clear the bio and type any text that does NOT contain X. "
-        "5) Save changes."
+        "3) Fill fields per TASK_CONSTRAINTS: "
+        "   name equals X → type exactly X; email contains Y → use an email containing that substring; "
+        "   age greater than Z → enter an age number > Z (e.g., 31). "
+        "4) For multi-field profile tasks (name, bio, title, about): update each constrained field, then Save."
     ),
     "POST_STATUS": (
         "PLAYBOOK: 1) On AutoConnect, find the status/post input area on the home/feed page. "
@@ -3625,18 +3584,6 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "   country contains X, role contains Y, name equals Z (or NOT contains W). "
         "3) Click 'Start Hiring' or 'Hire Now' button for that expert."
     ),
-    "CHOOSE_BUDGET_TYPE": (
-        "PLAYBOOK: 1) On AutoHire, navigate to the job posting or budget selection page. "
-        "2) Find the budget type selector/dropdown. "
-        "3) Select a budget type that does NOT CONTAIN the excluded string (e.g. NOT 'vkl'). "
-        "4) Confirm the selection."
-    ),
-    "WRITE_JOB_DESCRIPTION": (
-        "PLAYBOOK: 1) On AutoHire, navigate to the job posting form (click 'Post a Job' or similar). "
-        "2) Find the job description textarea/field. "
-        "3) Write a job description that does NOT contain the excluded text. "
-        "4) Submit or save the description."
-    ),
     # ---- AutoCalendar (8010) additional ----
     "SELECT_CALENDAR": (
         "PLAYBOOK: 1) On AutoCalendar, find the calendar list/sidebar. "
@@ -3650,11 +3597,6 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "3) Click on it / uncheck its checkbox to deselect/unselect it."
     ),
     # ---- AutoList (8011) additional ----
-    "AUTOLIST_ADD_TEAM_CLICKED": (
-        "PLAYBOOK: 1) On AutoList, navigate to the Teams section (usually in sidebar or settings). "
-        "2) Look for the 'Add Team' or 'New Team' button/option. "
-        "3) Click it to show the option to add a new team."
-    ),
     "AUTOLIST_COMPLETE_TASK": (
         "PLAYBOOK: 1) On AutoList, find the Tasks section. "
         "2) Find the task matching ALL constraints: "
@@ -3684,17 +3626,22 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "3) Press Enter or click Search."
     ),
     "SELECT_DATE": (
-        "PLAYBOOK: 1) On AutoRide, find the date picker for your trip. "
-        "2) Select the exact date from TASK_CONSTRAINTS (e.g. '2026-03-23'). "
-        "3) Confirm the date selection."
+        "PLAYBOOK: 1) On AutoRide, find the date picker for booking your trip. "
+        "2) Click to open the date calendar widget. "
+        "3) Read the constraint carefully: "
+        "   - if 'NOT equals X' or 'is NOT X': pick ANY date that is DIFFERENT from X "
+        "   - if 'equals X': pick EXACTLY that date "
+        "   - if 'after X' or 'AFTER X': pick any date after X "
+        "   - if 'before X' or 'BEFORE X': pick any date before X. "
+        "4) Click the chosen date to select it and confirm."
     ),
     # ---- AutoMedic (8013) additional ----
     "REFILL_PRESCRIPTION": (
-        "PLAYBOOK: 1) On AutoMedic, navigate to Prescriptions section. "
-        "2) Find a prescription matching ALL constraints: "
-        "   medicine_name NOT contains X, doctor_name NOT contains Y. "
-        "3) Click 'Refill' button on that prescription. "
-        "4) Confirm the refill action."
+        "PLAYBOOK: 1) On AutoMedic, open Prescriptions. "
+        "2) Find the prescription where medicine_name equals the EXACT value from the task "
+        "   (e.g., 'specific medicine' — use the literal string from TASK_CONSTRAINTS). "
+        "3) Click 'Refill' on that row. "
+        "4) Confirm if prompted."
     ),
     "VIEW_PRESCRIPTION": (
         "PLAYBOOK: 1) On AutoMedic, navigate to Prescriptions. "
@@ -3710,6 +3657,98 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "   sort_order NOT CONTAINS Z, speciality CONTAINS W. "
         "4) Apply the filter."
     ),
+    # ---- AutoSubnet (8014) ----
+    "VIEW_SUBNET": (
+        "PLAYBOOK: 1) On AutoSubnet, open the Subnets list (home or Subnets nav). "
+        "2) Find the subnet row matching ALL TASK_CONSTRAINTS: "
+        "   subnet_name, emission, price, marketCap, volume24h as specified (use exact displayed values). "
+        "3) Click that subnet to open its detail view."
+    ),
+    "VIEW_BLOCK": (
+        "PLAYBOOK: 1) On AutoSubnet, navigate to Blocks / Explorer. "
+        "2) Search or scroll to find the block matching number, hash, validator, epoch, extrinsicsCount, eventsCount. "
+        "3) Click the block row to show its detail page."
+    ),
+    "FAVORITE_SUBNET": (
+        "PLAYBOOK: 1) On AutoSubnet, browse subnets. "
+        "2) Find the subnet matching subnet_name / subnet_id from TASK_CONSTRAINTS "
+        "   (task text may reference 'favorites' — locate that subnet in the list). "
+        "3) Click the star/Favorite/heart icon or 'Add to favorites' on that subnet. "
+        "4) Open subnet details or favorites view if required to complete the task."
+    ),
+    # ---- AutoVoice (8015) ----
+    "CREATE_SERVER": (
+        "PLAYBOOK: 1) On AutoVoice, find '+' or 'Create Server' / 'Add a Server' in the left sidebar. "
+        "2) Click it to open the create dialog. "
+        "3) In server name, type a name that does NOT CONTAIN the excluded substring (e.g., not 'Support Desk'). "
+        "4) Click Create / Submit."
+    ),
+    "VIEW_SERVERS": (
+        "PLAYBOOK: 1) On AutoVoice, click the Home icon (house) in the top-left or sidebar. "
+        "2) The main server list view should appear. "
+        "3) Task complete when the server list is visible."
+    ),
+    # ---- AutoLodge (8007) ----
+    "REMOVE_FROM_WISHLIST": (
+        "PLAYBOOK: 1) On AutoLodge, find the Wishlist icon in the navbar (heart icon or 'Wishlist' link). "
+        "2) Click it to open your wishlist. "
+        "3) Browse the wishlisted hotel listings. "
+        "4) Find a listing matching ALL TASK_CONSTRAINTS: "
+        "   - title NOT equals X, reviews less_than Y, amenities include Z, rating greater_than W. "
+        "5) Click Remove / heart icon / 'Remove from Wishlist' on that listing."
+    ),
+    # ---- AutoDelivery (8006) ----
+    "QUICK_REORDER": (
+        "PLAYBOOK: 1) On AutoDelivery, look for 'Recent Orders', 'Order History', or 'Reorder' section. "
+        "2) Browse the recent orders shown. "
+        "3) Find a recent order where the item is NOT the excluded item AND the restaurant is NOT the excluded restaurant (from TASK_CONSTRAINTS). "
+        "4) Click the 'Reorder' button on that order entry."
+    ),
+    "EDIT_CART_ITEM": (
+        "PLAYBOOK: 1) On AutoDelivery, navigate to the Cart page. "
+        "2) Find the cart item matching ALL TASK_CONSTRAINTS: "
+        "   - item name does NOT CONTAIN the excluded value "
+        "   - restaurant name CONTAINS the required substring. "
+        "3) Click the Edit / pencil icon on that cart item to open the edit modal."
+    ),
+    # ---- AutoDoc (8004) ----
+    "DELETE_MATTER": (
+        "PLAYBOOK: 1) On AutoDoc, navigate to the Matters section. "
+        "2) Find the matter matching ALL TASK_CONSTRAINTS: "
+        "   - name does NOT CONTAIN the excluded substring "
+        "   - status/client if specified. "
+        "3) Click on that matter row to select it, or click the Delete/trash icon directly. "
+        "4) Confirm deletion if a dialog appears."
+    ),
+    # ---- AutoMail (8005) ----
+    "CREATE_LABEL": (
+        "PLAYBOOK: 1) On AutoMail, find the Labels section in the left sidebar. "
+        "2) Click '+' or 'Create Label' / 'New Label' button. "
+        "3) In the name field, type a label name that CONTAINS the required substring "
+        "   (e.g., if constraint is contains 'Persona', type 'Personal' or 'Persona'). "
+        "4) Save / create the label."
+    ),
+    # ---- AutoConnect (8008) ----
+    "REMOVE_POST": (
+        "PLAYBOOK: 1) On AutoConnect, browse the feed posts. "
+        "2) Find a post where: "
+        "   - author does NOT CONTAIN the excluded author substring "
+        "   - content does NOT CONTAIN the excluded content substring. "
+        "3) Click the 3-dot menu (⋮) or kebab menu on that post. "
+        "4) Click 'Remove', 'Delete', or 'Hide' to remove the post. "
+        "5) Confirm if prompted."
+    ),
+    # ---- AutoList (8011) ----
+    "AUTOLIST_SELECT_DATE_FOR_TASK": (
+        "PLAYBOOK: 1) On AutoList, find the task list. "
+        "2) Click on a task's Edit icon (pencil) or click the date field of any task to open the edit modal. "
+        "3) Find the date picker field in the modal. "
+        "4) Select a date satisfying the constraint: "
+        "   - if 'AFTER X': click a date that comes AFTER date X "
+        "   - if 'BEFORE X': click a date BEFORE X "
+        "   - if 'equals X': click exactly date X. "
+        "5) Confirm/save the date."
+    ),
     # --- General fallback ---
     "GENERAL": (
         "PLAYBOOK: Analyze the task carefully, identify the key action required, "
@@ -3720,7 +3759,7 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
 
 
 def _detect_website(url: str) -> str:
-    """Map URL port to website name for the 14 IWA websites."""
+    """Map URL port to website name for IWA demo apps."""
     m = re.search(r":(\d+)/", url or "")
     if m:
         port = int(m.group(1))
@@ -3739,6 +3778,8 @@ def _detect_website(url: str) -> str:
             8011: "AutoList",
             8012: "AutoRide",
             8013: "AutoMedic",
+            8014: "AutoSubnet",
+            8015: "AutoVoice",
         }.get(port, f"Unknown:{port}")
     return "Unknown"
 
@@ -3883,6 +3924,18 @@ def _website_context(website: str) -> str:
             "Search: filter fields for doctor_name, speciality, record_title, etc. "
             "Contact doctor form: opens when Contact button clicked on doctor card."
         ),
+        "AutoSubnet": (
+            "SITE: Subnet / chain explorer (Bittensor-style demo). NAV: Home, Subnets list, Blocks. "
+            "Subnet cards/rows: subnet_name, subnet_id, emission, price, marketCap, volume24h. "
+            "Click a subnet row/card to open detail view matching TASK_CONSTRAINTS. "
+            "Blocks: search or browse blocks; click a block matching number/hash/validator/epoch counts. "
+            "Favorites: star or 'Add to favorites' on a subnet row; show subnet info after favoriting."
+        ),
+        "AutoVoice": (
+            "SITE: Voice/chat server app (Discord-style demo). NAV: Home icon (house) shows server list, server sidebar. "
+            "+ or 'Create Server' opens modal: server_name field. "
+            "After creating, server appears in left list. Home icon returns to server list view."
+        ),
     }
     return ctx.get(website, "")
 
@@ -3902,12 +3955,11 @@ def _llm_decide(
     state_delta: str = "",
     prev_sig_set: set[str] | None = None,
     relevant_data: Dict[str, Any] | None = None,
-    eval_type: str = "",
 ) -> Dict[str, Any]:
     browser_state = _format_browser_state(candidates=candidates, prev_sig_set=prev_sig_set)
 
-    task_type = _resolve_task_type(task, eval_type=eval_type)
-    playbook = _TASK_PLAYBOOKS.get(task_type, _fallback_playbook_from_eval_type(eval_type))
+    task_type = _classify_task(task)
+    playbook = _TASK_PLAYBOOKS.get(task_type, _TASK_PLAYBOOKS["GENERAL"])
 
     # Website detection
     website_name = _detect_website(url)
@@ -3946,14 +3998,11 @@ def _llm_decide(
         "job_title_contains→type any title CONTAINING that substring.\n"
         "MULTI-STEP: complete login first, then the secondary action. Track progress in memory.\n"
         "TOOLS: Return {\"tool\":\"<name>\",\"args\":{...}} to inspect page. Max 1 tool per step. "
-        "Tools: visible_text({max_chars}); search_text({query,regex?}); list_candidates({max_n}); "
-        "list_cards({max_cards?,max_text?}); list_links({href_regex?,text_regex?}); "
-        "extract_forms({}); css_select({selector,max_nodes?}); xpath_select({xpath}). "
-        "Use tools when list/filter tasks need to find the ONE row matching ALL constraints."
+        "Tools: list_cards({max_cards?,max_text?}); search_text({query}); list_links({}); extract_forms({})."
     )
 
     history_lines: List[str] = []
-    for h in (history or [])[-2:]:
+    for h in (history or [])[-4:]:
         step = h.get("step", "?")
         action = h.get("action", "")
         cid = h.get("candidate_id")
@@ -3967,19 +4016,9 @@ def _llm_decide(
 
     structured = _structured_hints(task, candidates)
 
-    # Cards on early steps; longer for constraint-heavy list tasks
+    # Only include cards on early steps to save tokens
     cards_preview = ""
-    _task_l = (task or "").lower()
-    _needs_cards = int(step_index) <= 2 or (
-        int(step_index) <= 5
-        and bool(
-            re.search(
-                r"\b(where|filter|genres\s+field|rating\s+field|document|email|task|movie|hotel|job|member|restaurant)\b",
-                _task_l,
-            )
-        )
-    )
-    if _needs_cards:
+    if int(step_index) <= 2:
         try:
             cards_obj = _tool_list_cards(candidates=candidates, max_cards=6, max_text=120, max_actions_per_card=1)
             if isinstance(cards_obj, dict) and cards_obj.get("ok") and cards_obj.get("cards"):
@@ -4019,7 +4058,7 @@ def _llm_decide(
 
     user_msg = (
         f"TASK: {task}\n"
-        f"TYPE:{task_type} EVAL_TYPE:{(eval_type or '').strip().upper() or 'unknown'} SITE:{website_name} STEP:{int(step_index)} URL:{url}\n\n"
+        f"TYPE:{task_type} SITE:{website_name} STEP:{int(step_index)} URL:{url}\n\n"
         + (f"SITE_HINTS: {website_ctx_short}\n\n" if website_ctx_short else "")
         + (creds_block + "\n" if creds_block else "")
         + (constraints_block + "\n\n" if constraints_block else "")
@@ -4038,11 +4077,11 @@ def _llm_decide(
 
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     temperature = float(os.getenv("OPENAI_TEMPERATURE", "0.2"))
-    max_tokens = int(os.getenv("OPENAI_MAX_TOKENS", "250"))
+    max_tokens = int(os.getenv("OPENAI_MAX_TOKENS", "350"))
 
     usages: List[Dict[str, Any]] = []
     tool_calls = 0
-    max_tool_calls = int(os.getenv("AGENT_MAX_TOOL_CALLS", "4"))
+    max_tool_calls = int(os.getenv("AGENT_MAX_TOOL_CALLS", "2"))
 
     messages = [
         {"role": "system", "content": system_msg},
@@ -4245,18 +4284,12 @@ async def act(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
 
     task_id = str(payload.get("task_id") or "")
     task = payload.get("prompt") or payload.get("task_prompt") or ""
-    eval_type = (
-        payload.get("useCase")
-        or payload.get("use_case")
-        or payload.get("evaluation_type")
-        or ""
-    )
     url = payload.get("url") or ""
     step_index = int(payload.get("step_index") or 0)
     return_metrics = os.getenv("AGENT_RETURN_METRICS", "0").lower() in {"1", "true", "yes"}
 
-    # Step cap (raise via AGENT_MAX_STEPS for multi-step IWA tasks: filter → open → act)
-    max_steps_hard = int(os.getenv("AGENT_MAX_STEPS", "14"))
+    # Hard step cap: force done after 10 steps to avoid over-cost
+    max_steps_hard = int(os.getenv("AGENT_MAX_STEPS", "10"))
     if step_index >= max_steps_hard:
         return _resp([{"type": "DoneAction", "success": True}], {"decision": "forced_done_step_cap", "step_index": step_index})
 
@@ -4325,7 +4358,6 @@ async def act(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
             state_delta=state_delta,
             prev_sig_set=prev_sig_set,
             relevant_data=relevant_data,
-            eval_type=str(eval_type or ""),
         )
         if os.getenv("AGENT_LOG_DECISIONS", "0").lower() in {"1", "true", "yes"}:
             try:

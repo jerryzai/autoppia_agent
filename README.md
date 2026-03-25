@@ -38,21 +38,6 @@ uvicorn main:app --host 0.0.0.0 --port 5000
    ```
 3. Start the miner with PM2
 
-## Leaderboard / eval data (local only)
-
-Do **not** commit downloaded task dumps or eval outputs; they are listed in `.gitignore`.
-
-To refresh prompts locally, run (output path is ignored by git):
-
-```bash
-python scripts/fetch_leaderboard_tasks.py --out data/leaderboard_tasks_all_pages.json
-python scripts/list_usecases.py
-```
-
-The fetch script’s `BASE` URL lives in `scripts/fetch_leaderboard_tasks.py` if you need to change it.
-
-Each task row has `useCase` and `prompt` with constraints. The agent maps those into `TASK_CONSTRAINTS` for the LLM. Tune `_classify_task` / `_TASK_PLAYBOOKS` in `agent.py` for weak use cases.
-
 ## Supported Actions
 
 - `navigate` - `{"type": "navigate", "url": "https://..."}`
