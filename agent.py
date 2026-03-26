@@ -2902,6 +2902,160 @@ _TASK_PLAYBOOKS: Dict[str, str] = {
         "3) Find the one where earliest date NOT equals X. "
         "4) Click to view."
     ),
+    # ---- Newly observed leaderboard useCases (explicit coverage) ---
+    "ADD_FILM": (
+        "PLAYBOOK: 1) Open the admin/add film form. "
+        "2) Fill movie fields exactly per TASK_CONSTRAINTS (title/year/genre/etc.). "
+        "3) Save/submit to add the film."
+    ),
+    "ADD_REACTION": (
+        "PLAYBOOK: 1) Find the target post/content item matching constraints. "
+        "2) Open reaction picker if needed. "
+        "3) Click the required reaction."
+    ),
+    "ADD_TO_WISHLIST": (
+        "PLAYBOOK: 1) Navigate to the target item detail card/page. "
+        "2) Click wishlist/favorite/heart action to add it."
+    ),
+    "APPOINTMENT_BOOKED_SUCCESSFULLY": (
+        "PLAYBOOK: 1) Open doctor/appointment booking flow for the matched doctor. "
+        "2) Set date/time and required form fields from TASK_CONSTRAINTS. "
+        "3) Submit booking and confirm."
+    ),
+    "AUTOLIST_ADD_TEAM_CLICKED": (
+        "PLAYBOOK: 1) Go to AutoList Team section. "
+        "2) Click the Add Team / Create Team control."
+    ),
+    "BOOK_A_CONSULTATION": (
+        "PLAYBOOK: 1) Find the consultant matching constraints. "
+        "2) Start consultation booking/hire flow. "
+        "3) Confirm booking steps as requested."
+    ),
+    "BOOK_RESTAURANT": (
+        "PLAYBOOK: 1) Find restaurant matching constraints. "
+        "2) Open reservation form, set date/time/party size fields. "
+        "3) Submit booking."
+    ),
+    "BROWSE_FAVORITE_EXPERT": (
+        "PLAYBOOK: 1) Open favorites / saved experts page. "
+        "2) Browse/select the expert matching TASK_CONSTRAINTS."
+    ),
+    "CONNECT_WALLET": (
+        "PLAYBOOK: 1) Find Connect Wallet action/button. "
+        "2) Choose an available wallet option and confirm connect."
+    ),
+    "DELETE_FILM": (
+        "PLAYBOOK: 1) Find the film matching constraints in admin/list view. "
+        "2) Click Delete/Remove and confirm."
+    ),
+    "DETAILS_TOGGLE": (
+        "PLAYBOOK: 1) Find the target card/item row. "
+        "2) Click Details/Expand toggle for that item."
+    ),
+    "DISCONNECT_WALLET": (
+        "PLAYBOOK: 1) Open wallet/account menu. "
+        "2) Click Disconnect wallet / Sign out wallet and confirm."
+    ),
+    "EDIT_USER": (
+        "PLAYBOOK: 1) Find the target user matching constraints. "
+        "2) Open edit form, update required fields exactly, then save."
+    ),
+    "EDIT_USER_BOOK": (
+        "PLAYBOOK: 1) Navigate to the user profile/account form in AutoBooks. "
+        "2) Edit requested fields from TASK_CONSTRAINTS. "
+        "3) Save."
+    ),
+    "EMPTY_CART": (
+        "PLAYBOOK: 1) Open cart page. "
+        "2) Remove all items (or use Clear Cart) until cart is empty."
+    ),
+    "EXECUTE_BUY": (
+        "PLAYBOOK: 1) Find target asset/item matching constraints. "
+        "2) Click Buy/Execute Buy, fill required quantity/confirm fields, and submit."
+    ),
+    "EXECUTE_SELL": (
+        "PLAYBOOK: 1) Find target asset/item matching constraints. "
+        "2) Click Sell/Execute Sell, fill required quantity/confirm fields, and submit."
+    ),
+    "FILTER_JOBS": (
+        "PLAYBOOK: 1) Open jobs listing/filter controls. "
+        "2) Apply all filter constraints (role/location/type/salary/etc.). "
+        "3) Submit/apply filters."
+    ),
+    "LEAVE_VOICE_CHANNEL": (
+        "PLAYBOOK: 1) Navigate to the active voice channel area. "
+        "2) Click Leave/Disconnect voice control."
+    ),
+    "LIKE_POST": (
+        "PLAYBOOK: 1) Find the post matching constraints. "
+        "2) Click Like/Thumbs-up reaction once."
+    ),
+    "LOGOUT": (
+        "PLAYBOOK: 1) Open account/profile menu if needed. "
+        "2) Click Logout/Sign out."
+    ),
+    "NAVBAR_PROFILE_CLICK": (
+        "PLAYBOOK: 1) Find Profile option/avatar in navbar. "
+        "2) Click it."
+    ),
+    "NEW_LOG_ADDED": (
+        "PLAYBOOK: 1) Open logs/add-log flow. "
+        "2) Fill required log fields from constraints. "
+        "3) Save/submit the new log."
+    ),
+    "OCCASION_SELECTED": (
+        "PLAYBOOK: 1) Find occasion selector/dropdown. "
+        "2) Choose the required occasion value."
+    ),
+    "PLACE_ORDER": (
+        "PLAYBOOK: 1) Ensure correct item(s) are in cart/order summary. "
+        "2) Proceed to checkout and complete required fields. "
+        "3) Submit place order."
+    ),
+    "PURCHASE_BOOK": (
+        "PLAYBOOK: 1) Find target book, add to cart if needed. "
+        "2) Go to checkout and complete purchase."
+    ),
+    "SELECT_SERVER": (
+        "PLAYBOOK: 1) Open server list/sidebar. "
+        "2) Click the server matching TASK_CONSTRAINTS."
+    ),
+    "SELECT_TODAY": (
+        "PLAYBOOK: 1) In calendar view, click Today button/control."
+    ),
+    "SEND_DM_MESSAGE": (
+        "PLAYBOOK: 1) Open direct messages and select/create conversation with target user. "
+        "2) Type the required message text exactly and send."
+    ),
+    "SETTINGS_ACCOUNT": (
+        "PLAYBOOK: 1) Navigate to Settings -> Account. "
+        "2) Leave page open or apply requested account updates per task."
+    ),
+    "SETTINGS_NOTIFICATIONS": (
+        "PLAYBOOK: 1) Navigate to Settings -> Notifications. "
+        "2) Set requested toggles/options per TASK_CONSTRAINTS and save if needed."
+    ),
+    "TRANSFER_COMPLETE": (
+        "PLAYBOOK: 1) Open transfer/send flow. "
+        "2) Fill recipient/amount/network fields per constraints. "
+        "3) Confirm transfer to completion."
+    ),
+    "UPDATE_MATTER": (
+        "PLAYBOOK: 1) Find matter record matching constraints. "
+        "2) Open edit/update form, apply required changes, and save."
+    ),
+    "VIEW_ACCOUNT": (
+        "PLAYBOOK: 1) Open account/profile page from navbar or menu. "
+        "2) Ensure account details view is displayed."
+    ),
+    "VIEW_DMS": (
+        "PLAYBOOK: 1) Navigate to direct messages/inbox section. "
+        "2) Open the DM list view."
+    ),
+    "VIEW_SAVED_POSTS": (
+        "PLAYBOOK: 1) Open profile/saved items section. "
+        "2) Navigate to Saved Posts view."
+    ),
     # ---- General fallback ---
     "GENERAL": (
         "PLAYBOOK: Analyze the task carefully, identify the key action required, "
