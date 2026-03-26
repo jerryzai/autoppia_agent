@@ -1720,7 +1720,7 @@ def _classify_task(task: str) -> str:
         return "SEARCH_USERS"
     if re.search(r"go\s+back\s+to\s+all\s+jobs", t, re.IGNORECASE):
         return "BACK_TO_ALL_JOBS"
-    if re.search(r"navigate\s+to\s+the\s+'?home'?\s+tab", t, re.IGNORECASE):
+    if re.search(r"(navigate|go)\s+to\s+the\s+'?home'?\s+tab", t, re.IGNORECASE):
         return "HOME_NAVBAR"
     if re.search(r"show\s+me\s+my\s+hidden\s+posts", t, re.IGNORECASE):
         return "VIEW_HIDDEN_POSTS"
@@ -1742,6 +1742,8 @@ def _classify_task(task: str) -> str:
         return "NAVBAR_HIRE_LATER_CLICK"
     if re.search(r"contact\s+an\s+expert\s+where", t, re.IGNORECASE):
         return "CONTACT_EXPERT_OPENED"
+    if re.search(r"book\s+(a\s+)?consultation\s+whose", t, re.IGNORECASE):
+        return "BOOK_A_CONSULTATION"
     if re.search(r"confirm\s+hiring\s+of\s+(a\s+)?consultation", t, re.IGNORECASE):
         return "HIRE_CONSULTANT"
     if re.search(r"decide\s+to\s+remove\s+expert\s+from\s+hire\s+later", t, re.IGNORECASE):
@@ -1923,7 +1925,7 @@ def _classify_task(task: str) -> str:
             return "DELETE_BOOK"
     if re.search(r"modify\s+your\s+book|edit\s+(your\s+)?book\s+where", t, re.IGNORECASE):
         return "EDIT_BOOK"
-    if re.search(r"remove\s+from\s+the\s+reading\s+list", t, re.IGNORECASE):
+    if re.search(r"remove\s+from\s+(the\s+)?reading\s+list", t, re.IGNORECASE):
         return "REMOVE_FROM_READING_LIST"
     if re.search(r"go\s+to\s+the\s+contact\s+page\s+and\s+send", t, re.IGNORECASE):
         return "CONTACT_BOOK"
@@ -2085,7 +2087,7 @@ def _classify_task(task: str) -> str:
         return "REFILL_PRESCRIPTION"
     if re.search(r"(show\s+me\s+details\s+to\s+refill|show\s+details\s+for\s+a\s+prescription)", t, re.IGNORECASE):
         return "VIEW_PRESCRIPTION"
-    if re.search(r"show\s+details\s+for\s+doctor\s+reviews\s+where", t, re.IGNORECASE):
+    if re.search(r"(show|retrieve)\s+details\s+(for|of)\s+doctor\s+reviews\s+where|filter\s+doctor\s+reviews\s+where", t, re.IGNORECASE):
         return "FILTER_DOCTOR_REVIEWS"
 
     # ---- AutoBooks login/logout ----
@@ -2123,6 +2125,8 @@ def _classify_task(task: str) -> str:
         re.IGNORECASE,
     ):
         return "FAVORITE_SUBNET"
+    if re.search(r"show\s+details\s+for\s+a\s+transfer\s+where|transfer\s+where.*amount|find.*transfer\s+where", t, re.IGNORECASE):
+        return "TRANSFER_COMPLETE"
     if re.search(r"create\s+a\s+server\s+where", t, re.IGNORECASE):
         return "CREATE_SERVER"
     if re.search(
@@ -2131,6 +2135,8 @@ def _classify_task(task: str) -> str:
         re.IGNORECASE,
     ):
         return "VIEW_SERVERS"
+    if re.search(r"select\s+(a\s+|the\s+)?server\s+where|click\s+the\s+server\s+where|open.*server\s+where", t, re.IGNORECASE):
+        return "SELECT_SERVER"
 
     # ---- AutoDelivery (8006) missing ----
     if re.search(r"reorder\s+the\s+recent\s+item", t, re.IGNORECASE):
@@ -2145,6 +2151,18 @@ def _classify_task(task: str) -> str:
     # ---- AutoMail (8005) missing ----
     if re.search(r"create\s+a\s+new\s+label", t, re.IGNORECASE):
         return "CREATE_LABEL"
+
+    # ---- Settings ----
+    if re.search(r"settings.*notifications|set\s+notifications\s+so\s+that|navigate.*settings.*notifications", t, re.IGNORECASE):
+        return "SETTINGS_NOTIFICATIONS"
+
+    # ---- Details toggle ----
+    if re.search(r"(toggle|expand)\s+the\s+details|click.*details\s+toggle|details.*toggle\s+(for|on)", t, re.IGNORECASE):
+        return "DETAILS_TOGGLE"
+
+    # ---- AutoCinema/AutoBooks login + edit user ----
+    if re.search(r"edit\s+user\s+where|edit\s+user\s+whose", t, re.IGNORECASE) and re.search(r"\b(login|sign.?in|authenticate)\b", t, re.IGNORECASE):
+        return "EDIT_USER"
 
     # ---- Task management ----
     if re.search(r"delete\s+task\b", t, re.IGNORECASE):
