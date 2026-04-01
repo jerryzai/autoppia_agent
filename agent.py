@@ -1,318 +1,198 @@
+"""Main agent orchestrator - the decision pipeline.
+
+Architecture: graduated complexity cascade
+1. Quick click shortcuts (regex → known element ID)       ~5% tasks, 0 LLM calls
+2. Search shortcuts (type into known search input)        ~10% tasks, 0 LLM calls
+3. Form shortcuts (login/reg/contact/logout detection)    ~25% tasks, 0 LLM calls
+4. LLM decision (full prompt with context)                ~60% tasks, 1 LLM call
+5. Fallback (scroll/wait)                                 safety net
+
+Key innovations over individual agents:
+- Combined shortcut patterns from all three top agents
+- Enhanced constraint parsing with credential extraction
+- Context-per-candidate for better LLM disambiguation
+- DOM digest on early steps for page orientation
+- Adaptive stuck recovery (scroll → click → navigate)
+- Login-then-action compound task support via state tracking
+"""
 from __future__ import annotations
+import logging
 
-from typing import Any, Dict, List, Optional, Tuple
+from config import (
+    detect_website,
+    WEBSITE_HINTS,
+    TASK_PLAYBOOKS,
+)
+from classifier import classify_task_type, classify_shortcut_type
+from constraint_parser import (
+    parse_constraints,
+    format_constraints_block,
+    extract_credentials,
+)
+from html_parser import prune_html, extract_candidates, build_page_ir, build_dom_digest
+from navigation import extract_seed
+from shortcuts import try_quick_click, try_search_shortcut, try_shortcut
+from state_tracker import StateTracker
+from llm_client import LLMClient
+from prompts import build_system_prompt, build_user_prompt
+from action_builder import parse_llm_response, build_iwa_action, WAIT_ACTION
 
-import json
-import hashlib
-import os
-import re
-from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
-from html.parser import HTMLParser
+logger = logging.getLogger(__name__)
 
-from fastapi import Body, FastAPI, HTTPException
-
-from llm_gateway import openai_chat_completions, is_sandbox_gateway_base_url
-
-try:
-    from bs4 import BeautifulSoup  # type: ignore
-except Exception:
-    BeautifulSoup = None
-
-
-app = FastAPI(title="Autoppia Web Agent API")
-
-_TASK_STATE: dict[str, dict[str, object]] = {}
-
-
-@app.get("/health", summary="Health check")
-async def health() -> Dict[str, str]:
-    return {"status": "healthy"}
+_llm_client: LLMClient | None = None
 
 
-# ---------------------------------------------------------------------------
-# IWA Selector helpers
-# ---------------------------------------------------------------------------
-
-def _sel_attr(attribute: str, value: str, case_sensitive: bool = False) -> Dict[str, Any]:
-    return {
-        "type": "attributeValueSelector",
-        "attribute": attribute,
-        "value": value,
-        "case_sensitive": case_sensitive,
-    }
+def _get_llm_client() -> LLMClient:
+    global _llm_client
+    if _llm_client is None:
+        _llm_client = LLMClient()
+    return _llm_client
 
 
-def _sel_text(value: str, case_sensitive: bool = False) -> Dict[str, Any]:
-    return {
-        "type": "tagContainsSelector",
-        "value": value,
-        "case_sensitive": case_sensitive,
-    }
+def _record_actions(task_id: str, actions: list[dict], url: str, step: int) -> None:
+    """Record all returned actions into state tracker."""
+    for i, act in enumerate(actions):
+        sel_val = ""
+        sel = act.get("selector", {})
+        if isinstance(sel, dict):
+            sel_val = sel.get("value", "")
+        text = act.get("text", "")
+        StateTracker.record_action(task_id, act.get("type", ""), sel_val, url, step + i, text)
+        if act.get("type") == "TypeAction" and sel_val:
+            StateTracker.record_filled_field(task_id, sel_val)
 
 
-def _sel_custom(value: str, case_sensitive: bool = False) -> Dict[str, Any]:
-    return {
-        "type": "attributeValueSelector",
-        "attribute": "custom",
-        "value": value,
-        "case_sensitive": case_sensitive,
-    }
+async def handle_act(
+    task_id: str | None,
+    prompt: str | None,
+    url: str | None,
+    snapshot_html: str | None,
+    screenshot: str | None,
+    step_index: int | None,
+    web_project_id: str | None,
+    history: list | None = None,
+) -> list[dict]:
+    """Main entry point called by /act endpoint."""
+    if not prompt or not url:
+        logger.warning("Missing prompt or url")
+        return [WAIT_ACTION]
 
+    step = step_index or 0
+    task = task_id or "unknown"
+    website = web_project_id or detect_website(url)
+    seed = extract_seed(url)
+    state = StateTracker.get_or_create(task)
 
-def _sel_xpath(value: str) -> Dict[str, Any]:
-    return {
-        "type": "xpathSelector",
-        "attribute": None,
-        "value": value,
-        "case_sensitive": False,
-    }
+    # Initialize on step 0
+    if step == 0:
+        state.constraints = parse_constraints(prompt)
+        state.task_type = classify_task_type(prompt)
+        state.login_done = False
+        state.history.clear()
+        state.filled_fields.clear()
+        StateTracker.auto_cleanup()
 
+    # ===================================================================
+    # STAGE 1: Quick click shortcuts (no HTML parsing needed)
+    # ===================================================================
+    quick = try_quick_click(prompt, url, seed, step)
+    if quick is not None:
+        logger.info(f"Quick click: {len(quick)} actions")
+        _record_actions(task, quick, url, step)
+        return quick
 
-def _selector_repr(selector: Dict[str, Any]) -> str:
-    t = selector.get("type")
-    a = selector.get("attribute")
-    v = selector.get("value")
-    if t == "attributeValueSelector":
-        vv = str(v)
-        if len(vv) > 80:
-            vv = vv[:77] + "..."
-        return f"attr[{a}]={vv}"
-    if t == "tagContainsSelector":
-        return f"text~={v}"
-    return str(selector)
+    # ===================================================================
+    # STAGE 2: Search shortcut
+    # ===================================================================
+    search = try_search_shortcut(prompt, website)
+    if search is not None:
+        logger.info(f"Search shortcut: {len(search)} actions")
+        _record_actions(task, search, url, step)
+        return search
 
-
-# ---------------------------------------------------------------------------
-# Candidate extraction
-# ---------------------------------------------------------------------------
-
-def _norm_ws(s: str) -> str:
-    return re.sub(r"\s+", " ", (s or "")).strip()
-
-
-class _Candidate:
-    def __init__(
-        self,
-        selector: Dict[str, Any],
-        text: str,
-        tag: str,
-        attrs: Dict[str, str],
-        *,
-        text_selector: Optional[Dict[str, Any]] = None,
-        context: str = "",
-        context_raw: str = "",
-        group: str = "",
-        container_chain: list[str] | None = None,
-    ):
-        self.selector = selector
-        self.text_selector = text_selector
-        self.text = text
-        self.tag = tag
-        self.attrs = attrs
-        self.context = context
-        self.context_raw = context_raw
-        self.group = group
-        self.container_chain = container_chain or []
-
-    def click_selector(self) -> Dict[str, Any]:
-        if isinstance(self.selector, dict) and self.selector.get("type") == "attributeValueSelector":
-            attr = str(self.selector.get("attribute") or "")
-            if attr in {"id", "href", "data-testid", "name", "aria-label", "placeholder", "title"}:
-                return self.selector
-
-        for a in ("id", "data-testid", "href", "aria-label", "name", "placeholder", "title"):
-            v = (self.attrs or {}).get(a)
-            if v:
-                return _sel_attr(a, v)
-
-        try:
-            t = (self.text or "").strip()
-            if t and self.tag in {"button", "a"}:
-                return _sel_custom(f"{self.tag}:has-text({json.dumps(t)})")
-        except Exception:
-            pass
-
-        if self.text_selector:
-            return self.text_selector
-
-        return self.selector
-
-    def type_selector(self) -> Dict[str, Any]:
-        if isinstance(self.selector, dict) and self.selector.get("type") == "attributeValueSelector":
-            attr = str(self.selector.get("attribute") or "")
-            if attr and attr != "class":
-                return self.selector
-
-        for a in ("id", "data-testid", "name", "aria-label", "placeholder", "title"):
-            v = (self.attrs or {}).get(a)
-            if v:
-                return _sel_attr(a, v)
-
-        return _sel_custom(self.tag)
-
-
-class _CandidateExtractor(HTMLParser):
-    """Fallback extractor when BeautifulSoup isn't available."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self._current_text: List[str] = []
-        self._last_tag: Optional[str] = None
-        self._last_attrs: Dict[str, str] = {}
-        self.candidates: List[_Candidate] = []
-
-    def handle_starttag(self, tag: str, attrs: List[Tuple[str, Optional[str]]]) -> None:
-        attr_map = {k: (v or "") for k, v in attrs}
-        self._last_tag = tag
-        self._last_attrs = attr_map
-
-        if tag in {"button", "a", "input", "textarea", "select"} or attr_map.get("role") in {"button", "link"}:
-            label = attr_map.get("aria-label") or attr_map.get("placeholder") or attr_map.get("title") or ""
-            selector = _build_selector(tag, attr_map, text=label)
-            group = "FORM" if tag in {"input", "textarea", "select"} else ("LINKS" if tag == "a" else "BUTTONS")
-            self.candidates.append(_Candidate(selector, label, tag, attr_map, context="", group=group, container_chain=[group]))
-
-    def handle_data(self, data: str) -> None:
-        if self._last_tag in {"button", "a"} and data.strip():
-            self._current_text.append(data.strip())
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag == self._last_tag and self._current_text and self.candidates:
-            text = " ".join(self._current_text)[:120]
-            c = self.candidates[-1]
-            c.text = text or c.text
-            if c.tag in {"button", "a"} and c.text:
-                c.text_selector = _sel_text(c.text, case_sensitive=False)
-        self._current_text = []
-
-
-def _attrs_to_str_map(attrs: Dict[str, Any]) -> Dict[str, str]:
-    out: Dict[str, str] = {}
-    for k, v in (attrs or {}).items():
-        if v is None:
-            continue
-        if isinstance(v, (list, tuple)):
-            out[k] = " ".join(str(x) for x in v if x is not None).strip()
-        else:
-            out[k] = str(v)
-    return out
-
-
-def _build_selector(tag: str, attrs: Dict[str, str], *, text: str) -> Dict[str, Any]:
-    if attrs.get("id"):
-        return _sel_attr("id", attrs["id"])
-    if attrs.get("data-testid"):
-        return _sel_attr("data-testid", attrs["data-testid"])
-    if tag == "a" and attrs.get("href") and not attrs["href"].lower().startswith("javascript:"):
-        return _sel_attr("href", attrs["href"])
-    if attrs.get("aria-label"):
-        return _sel_attr("aria-label", attrs["aria-label"])
-    if attrs.get("name"):
-        return _sel_attr("name", attrs["name"])
-    if attrs.get("placeholder"):
-        return _sel_attr("placeholder", attrs["placeholder"])
-    if attrs.get("title"):
-        return _sel_attr("title", attrs["title"])
-    if text and tag in {"button", "a"}:
-        return _sel_text(text, case_sensitive=False)
-    return _sel_custom(tag)
-
-
-def _extract_label_from_bs4(soup, el, attr_map: Dict[str, str]) -> str:
-    tag = str(getattr(el, "name", "") or "")
-
-    if tag in {"a", "button"}:
-        t = _norm_ws(el.get_text(" ", strip=True))
-        if t:
-            return t[:120]
-
-    for key in ("aria-label", "placeholder", "title"):
-        if attr_map.get(key):
-            return _norm_ws(attr_map[key])[:120]
-
-    if attr_map.get("aria-labelledby"):
-        lid = attr_map["aria-labelledby"].split()[0]
-        if lid:
-            lab = soup.find(id=lid)
-            if lab is not None:
-                t = _norm_ws(lab.get_text(" ", strip=True))
-                if t:
-                    return t[:120]
-
-    if attr_map.get("id"):
-        lab = soup.find("label", attrs={"for": attr_map["id"]})
-        if lab is not None:
-            t = _norm_ws(lab.get_text(" ", strip=True))
-            if t:
-                return t[:120]
-
-    parent_label = el.find_parent("label")
-    if parent_label is not None:
-        t = _norm_ws(parent_label.get_text(" ", strip=True))
-        if t:
-            return t[:120]
-
-    return ""
-
-
-def _pick_context_container_bs4(el) -> object | None:
-    try:
+    # ===================================================================
+    # Parse HTML and extract candidates
+    # ===================================================================
+    if snapshot_html and snapshot_html.strip():
+        soup = prune_html(snapshot_html)
+        candidates = extract_candidates(soup)
+    else:
+        soup = None
         candidates = []
-        cur = el
-        for _depth in range(8):
-            if cur is None:
-                break
-            try:
-                cur = cur.parent
-            except Exception:
-                break
-            if cur is None:
-                break
-            tag = str(getattr(cur, "name", "") or "")
-            if tag not in {"li", "tr", "article", "section", "div", "td"}:
-                continue
 
-            try:
-                txt_raw = cur.get_text("\n", strip=True)
-            except Exception:
-                txt_raw = ""
-            L = len(txt_raw or "")
-            if L <= 0:
-                continue
+    # ===================================================================
+    # STAGE 3: Form-based shortcuts (login/reg/contact/logout)
+    # ===================================================================
+    shortcut_type = classify_shortcut_type(prompt)
 
-            try:
-                n_inter = len(cur.find_all(["a", "button", "input", "select", "textarea"]))
-            except Exception:
-                n_inter = 0
+    # For login_then_action: do login shortcut on early steps, then fall to LLM
+    if state.task_type == "login_then_action" and not state.login_done:
+        shortcut_type = "login"
 
-            candidates.append((L, n_inter, cur))
+    if shortcut_type and soup and candidates:
+        shortcut_actions = try_shortcut(shortcut_type, candidates, soup, step)
+        if shortcut_actions is not None:
+            logger.info(f"Shortcut '{shortcut_type}': {len(shortcut_actions)} actions")
+            _record_actions(task, shortcut_actions, url, step)
+            # Mark login done for compound tasks
+            if shortcut_type == "login":
+                StateTracker.mark_login_done(task)
+            return shortcut_actions
 
-        if not candidates:
-            return None
+    # ===================================================================
+    # No candidates = page still loading or empty
+    # ===================================================================
+    if not candidates:
+        logger.warning("No candidates - page may still be loading")
+        StateTracker.record_action(task, "WaitAction", "", url, step)
+        return [{"type": "WaitAction", "time_seconds": 2}]
 
-        best = None
-        best_key = None
-        for L, n_inter, node in candidates:
-            if not (50 <= L <= 900):
-                continue
-            if n_inter <= 0 or n_inter > 12:
-                continue
-            key = (L, n_inter)
-            if best is None or key < (best_key or key):
-                best = node
-                best_key = key
-        if best is not None:
-            return best
+    # ===================================================================
+    # STAGE 4: Stuck recovery (before LLM to save tokens)
+    # ===================================================================
+    loop_warning = StateTracker.detect_loop(task, url)
+    stuck_warning = StateTracker.detect_stuck(task, url)
 
-        candidates.sort(key=lambda t: (t[0], t[1]))
-        return candidates[0][2]
-    except Exception:
-        return None
+    if stuck_warning and step >= 3:
+        recent = state.history[-2:] if len(state.history) >= 2 else []
+        all_scrolls = all(a.action_type == "ScrollAction" for a in recent) if recent else False
+        if not all_scrolls:
+            logger.info("Stuck recovery: auto-scroll")
+            StateTracker.record_action(task, "ScrollAction", "", url, step)
+            return [{"type": "ScrollAction", "down": True}]
 
+    # ===================================================================
+    # STAGE 5: Build page IR and context
+    # ===================================================================
+    page_ir = build_page_ir(soup, url, candidates)
+    page_ir_text = page_ir.raw_text
 
-def _container_chain_from_el(soup, el) -> list[str]:
-    chain: list[str] = []
+    # DOM digest for early steps (helps LLM understand page layout)
+    dom_digest = ""
+    if soup and step <= 1:
+        dom_digest = build_dom_digest(soup)
+
+    # Prepare prompt layers
+    action_history = StateTracker.get_recent_history(task, count=4)
+    filled_fields = StateTracker.get_filled_fields(task)
+    constraints_block = format_constraints_block(state.constraints)
+    website_hint = WEBSITE_HINTS.get(website, "") if website else ""
+    playbook = TASK_PLAYBOOKS.get(state.task_type, TASK_PLAYBOOKS.get("general", ""))
+
+    # Credential info
+    creds = extract_credentials(prompt)
+    cred_parts = []
+    if creds.get("username"):
+        cred_parts.append(f"username={creds['username']}")
+    if creds.get("password"):
+        cred_parts.append(f"password={creds['password']}")
+    credentials_info = ", ".join(cred_parts) if cred_parts else ""
+
+    # ===================================================================
+    # STAGE 6: LLM decision
+    # ===================================================================
     try:
+<<<<<<< HEAD
         ancestors = list(el.parents) if hasattr(el, "parents") else []
         for a in reversed(ancestors):
             try:
@@ -4240,175 +4120,88 @@ async def act(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
             url=effective_url,
             candidates=candidates,
             page_summary=page_summary,
+=======
+        client = _get_llm_client()
+        system_prompt = build_system_prompt()
+        user_prompt = build_user_prompt(
+            prompt=prompt,
+            page_ir_text=page_ir_text,
+            step_index=step,
+            task_type=state.task_type,
+            action_history=action_history,
+            website=website,
+            website_hint=website_hint,
+            constraints_block=constraints_block,
+            credentials_info=credentials_info,
+            playbook=playbook,
+            loop_warning=loop_warning,
+            stuck_warning=stuck_warning,
+            filled_fields=filled_fields,
+>>>>>>> ebe700281f81cfe3ff4a26275cc4c580add9666c
             dom_digest=dom_digest,
-            html_snapshot=html,
-            history=history,
-            extra_hint=extra_hint,
-            state_delta=state_delta,
-            prev_sig_set=prev_sig_set,
-            relevant_data=relevant_data,
         )
-        if os.getenv("AGENT_LOG_DECISIONS", "0").lower() in {"1", "true", "yes"}:
-            try:
-                top = []
-                for i, c in enumerate(candidates[:5]):
-                    top.append({
-                        "i": i,
-                        "tag": c.tag,
-                        "text": (c.text or "")[:80],
-                        "context": (c.context or "")[:80],
-                        "sel": _selector_repr(c.selector),
-                        "click_sel": _selector_repr(c.click_selector()),
-                    })
-                print(json.dumps({
-                    "task_id": task_id,
-                    "url": url,
-                    "task": task_for_llm[:200],
-                    "decision": decision,
-                    "top_candidates": top,
-                }, ensure_ascii=True))
-            except Exception:
-                pass
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        llm_response = client.chat(task_id=task, messages=messages)
     except Exception as e:
-        if os.getenv("AGENT_DEBUG_ERRORS", "0").lower() in {"1", "true", "yes"}:
-            raise HTTPException(status_code=500, detail=str(e)[:400])
-        if task_id != "check" and os.getenv("AGENT_LOG_ERRORS", "0").lower() in {"1", "true", "yes"}:
-            try:
-                key = os.getenv("OPENAI_API_KEY", "")
-                key_fpr = hashlib.sha256(key.encode("utf-8")).hexdigest()[:12] if key else "missing"
-                base_url = (os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1").rstrip("/")
-                print(json.dumps({"event": "agent_error", "task_id": task_id, "error": str(e)[:400], "key_fpr": key_fpr, "base_url": base_url}, ensure_ascii=True))
-            except Exception:
-                pass
-        return _resp([{"type": "WaitAction", "time_seconds": 1.0}], {"decision": "error_wait"})
+        logger.error(f"LLM call failed: {e}")
+        return [WAIT_ACTION]
 
-    try:
-        if task_id:
-            st3 = _TASK_STATE.get(task_id)
-            if isinstance(st3, dict):
-                if isinstance(decision.get("memory"), str):
-                    st3["memory"] = decision.get("memory")
-                if isinstance(decision.get("next_goal"), str):
-                    st3["next_goal"] = decision.get("next_goal")
-    except Exception:
-        pass
+    # ===================================================================
+    # STAGE 7: Parse and validate response
+    # ===================================================================
+    decision = parse_llm_response(llm_response)
 
-    action = (decision.get("action") or "").lower()
-    cid = decision.get("candidate_id")
-    text = decision.get("text")
-
-    if isinstance(cid, str) and cid.isdigit():
-        cid = int(cid)
-
-    if action == "navigate":
-        nav_url_raw = str(decision.get("url") or "").strip()
-        if not nav_url_raw:
-            return _resp([{"type": "WaitAction", "time_seconds": 1.0}], {"decision": "navigate_missing_url"})
-
-        nav_url = _resolve_url(nav_url_raw, effective_url or str(url))
-
-        if _same_path_query(nav_url, effective_url, base_a=effective_url, base_b=""):
-            _update_task_state(task_id, str(url), "navigate_same_url_scroll")
-            return _resp([{"type": "ScrollAction", "down": True, "up": False}], {"decision": "scroll_override"})
-
-        _update_task_state(task_id, str(url), f"navigate:{nav_url}")
+    if decision is None:
+        # Retry once with stronger instruction
+        logger.warning(f"Parse failed, retrying. Response: {llm_response[:200]}")
         try:
-            if task_id and isinstance(_TASK_STATE.get(task_id), dict):
-                _TASK_STATE[task_id]["effective_url"] = str(nav_url)
-        except Exception:
-            pass
-        return _resp(
-            [{"type": "NavigateAction", "url": nav_url, "go_back": False, "go_forward": False}],
-            {"decision": "navigate", "url": nav_url, "model": decision.get("_meta", {}).get("model"), "llm": decision.get("_meta", {})},
-        )
+            messages.append({"role": "assistant", "content": llm_response})
+            messages.append({
+                "role": "user",
+                "content": (
+                    "Your response was NOT valid JSON. "
+                    "Return ONLY a JSON object like {\"action\": \"click\", \"candidate_id\": 0}. "
+                    "No markdown, no commentary, no code fences."
+                ),
+            })
+            retry_response = client.chat(task_id=task, messages=messages)
+            decision = parse_llm_response(retry_response)
+        except Exception as e:
+            logger.error(f"LLM retry failed: {e}")
 
-    if action in {"scroll_down", "scroll_up"}:
-        _update_task_state(task_id, str(url), f"{action}")
-        return _resp(
-            [{"type": "ScrollAction", "down": action == "scroll_down", "up": action == "scroll_up"}],
-            {"decision": decision.get("action"), "candidate_id": int(cid) if isinstance(cid, int) else None, "model": decision.get("_meta", {}).get("model"), "llm": decision.get("_meta", {})},
-        )
+    if decision is None:
+        logger.warning("All parse attempts failed")
+        # Fallback: scroll on later steps, click first candidate on early steps
+        if step <= 3 and candidates:
+            fallback = {"type": "ClickAction", "selector": candidates[0].selector.model_dump()}
+        else:
+            fallback = {"type": "ScrollAction", "down": True}
+        _record_actions(task, [fallback], url, step)
+        return [fallback]
 
-    if action == "wait":
-        if candidates:
-            selector = candidates[0].click_selector()
-            _update_task_state(task_id, str(url), f"click_override:{_selector_repr(selector)}")
-            return _resp([{"type": "ClickAction", "selector": selector}], {"decision": "click", "candidate_id": int(cid) if isinstance(cid, int) else None, "model": decision.get("_meta", {}).get("model"), "llm": decision.get("_meta", {})})
-        _update_task_state(task_id, str(url), "scroll_override")
-        return _resp([{"type": "ScrollAction", "down": True, "up": False}], {"decision": "scroll_override", "model": decision.get("_meta", {}).get("model"), "llm": decision.get("_meta", {})})
+    # ===================================================================
+    # STAGE 8: Build action
+    # ===================================================================
+    action = build_iwa_action(decision, page_ir.candidates, url, seed)
+    action_type = action.get("type", "unknown")
 
-    if action == "done":
-        _update_task_state(task_id, str(url), "done")
-        return _resp([], {"decision": "done", "candidate_id": int(cid) if isinstance(cid, int) else None, "model": decision.get("_meta", {}).get("model"), "llm": decision.get("_meta", {})})
+    # Block NavigateAction on step 0 (already on correct page)
+    if step == 0 and action_type == "NavigateAction":
+        logger.info("Blocked NavigateAction on step 0 → scroll instead")
+        action = {"type": "ScrollAction", "down": True}
+        action_type = "ScrollAction"
 
-    if action in {"click", "type", "select"} and isinstance(cid, int) and 0 <= cid < len(candidates):
-        c = candidates[cid]
+    # Done signal
+    if action_type == "IdleAction":
+        logger.info("Task marked done by LLM")
+        _record_actions(task, [action], url, step)
+        return []
 
-        if action == "click":
-            selector = c.click_selector()
-            try:
-                if isinstance(selector, dict) and selector.get("type") == "attributeValueSelector" and selector.get("attribute") == "href":
-                    href = str(selector.get("value") or "")
-                    fixed = _preserve_seed_url(href, effective_url or str(url))
-                    if fixed and fixed != href:
-                        fixed_abs = _resolve_url(fixed, effective_url or str(url))
-                        if _same_path_query(fixed_abs, effective_url, base_a=effective_url, base_b=""):
-                            _update_task_state(task_id, str(url), "navigate_seed_fix_same_url_scroll")
-                            return _resp([{"type": "ScrollAction", "down": True, "up": False}], {"decision": "scroll_override"})
-                        _update_task_state(task_id, str(url), f"navigate_seed_fix:{fixed_abs}")
-                        try:
-                            if task_id and isinstance(_TASK_STATE.get(task_id), dict):
-                                _TASK_STATE[task_id]["effective_url"] = str(fixed_abs)
-                        except Exception:
-                            pass
-                        return _resp(
-                            [{"type": "NavigateAction", "url": fixed_abs, "go_back": False, "go_forward": False}],
-                            {"decision": "navigate", "url": fixed_abs, "candidate_id": int(cid) if isinstance(cid, int) else None, "model": decision.get("_meta", {}).get("model"), "llm": decision.get("_meta", {})},
-                        )
-            except Exception:
-                pass
-            _update_task_state(task_id, str(url), f"click:{_selector_repr(selector)}")
-            return _resp(
-                [{"type": "ClickAction", "selector": selector}],
-                {"decision": "click", "candidate_id": int(cid) if isinstance(cid, int) else None, "model": decision.get("_meta", {}).get("model"), "llm": decision.get("_meta", {})},
-            )
-
-        if action == "type":
-            if not text:
-                raise HTTPException(status_code=400, detail="type action missing text")
-            selector = c.type_selector()
-            _update_task_state(task_id, str(url), f"type:{_selector_repr(selector)}")
-            return _resp(
-                [{"type": "TypeAction", "selector": selector, "text": str(text)}],
-                {"decision": "type", "candidate_id": int(cid) if isinstance(cid, int) else None, "model": decision.get("_meta", {}).get("model"), "llm": decision.get("_meta", {})},
-            )
-
-        if action == "select":
-            if not text:
-                raise HTTPException(status_code=400, detail="select action missing text")
-            selector = c.type_selector()
-            _update_task_state(task_id, str(url), f"select:{_selector_repr(selector)}")
-            return _resp(
-                [{"type": "SelectDropDownOptionAction", "selector": selector, "text": str(text), "timeout_ms": int(os.getenv("AGENT_SELECT_TIMEOUT_MS", "4000"))}],
-                {"decision": "select", "candidate_id": int(cid) if isinstance(cid, int) else None, "model": decision.get("_meta", {}).get("model"), "llm": decision.get("_meta", {})},
-            )
-
-    if candidates and step_index < 5:
-        selector = candidates[0].click_selector()
-        _update_task_state(task_id, str(url), f"fallback_click:{_selector_repr(selector)}")
-        return _resp(
-            [{"type": "ClickAction", "selector": selector}],
-            {"decision": "click_override", "candidate_id": 0 if candidates else None, "model": decision.get("_meta", {}).get("model"), "llm": decision.get("_meta", {})},
-        )
-    _update_task_state(task_id, str(url), "fallback_wait")
-    return _resp([{"type": "WaitAction", "time_seconds": 2.0}], {"decision": "fallback_wait", "model": decision.get("_meta", {}).get("model"), "llm": decision.get("_meta", {})})
-
-
-@app.post("/step", summary="Alias for /act")
-async def step(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
-    return await act(payload)
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("agent:app", host="0.0.0.0", port=8000, reload=True)
+    logger.info(f"LLM action: {action_type}")
+    _record_actions(task, [action], url, step)
+    return [action]
