@@ -27,7 +27,7 @@ class LLMClient:
         self.model = os.getenv("OPENAI_MODEL", LLM_MODEL)
         self.temperature = float(os.getenv("OPENAI_TEMPERATURE", str(LLM_TEMPERATURE)))
         self.max_tokens = int(os.getenv("OPENAI_MAX_TOKENS", str(LLM_MAX_TOKENS)))
-        self._client = httpx.Client(timeout=25.0)
+        self._client = httpx.Client(timeout=30.0)
         self._total_cost = 0.0
 
     @retry(
@@ -36,7 +36,10 @@ class LLMClient:
         retry=retry_if_exception(_is_retryable),
     )
     def chat(self, task_id: str, messages: list[dict]) -> str:
-        headers = {"Content-Type": "application/json", "IWA-Task-ID": task_id}
+        headers = {
+            "Content-Type": "application/json",
+            "IWA-Task-ID": task_id,
+        }
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 

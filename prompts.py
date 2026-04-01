@@ -1,46 +1,24 @@
-"""Multi-layer prompt construction combining best strategies from all top agents.
-
-Layer architecture:
-1. System prompt: rigid action schema + JSON-only enforcement
-2. Task context: prompt + classification + website + step counter
-3. Constraints block: parsed constraints formatted for LLM
-4. Credentials: extracted credential values
-5. Website hints + playbook: domain knowledge
-6. Warnings: loop/stuck detection
-7. Action history: recent steps with outcomes
-8. Filled fields: prevent re-filling
-9. DOM digest: page structure summary (early steps only)
-10. Page IR: interactive elements with context
-11. Final instruction: action request
-"""
+"""Enhanced multi-layer prompt construction with memory, state delta, and tool use support."""
 from __future__ import annotations
 
 
 def build_system_prompt() -> str:
-    return """You are an expert web automation agent. You analyze web pages and choose precise browser actions to complete tasks.
-
-RESPONSE FORMAT: Return a SINGLE JSON object. No markdown, no explanation, no code fences.
-
-ACTIONS:
-  {"action": "click", "candidate_id": N}
-  {"action": "type", "candidate_id": N, "text": "value"}
-  {"action": "select_option", "candidate_id": N, "text": "option text"}
-  {"action": "navigate", "url": "http://localhost:PORT/path?seed=X"}
-  {"action": "scroll", "direction": "down"}
-  {"action": "scroll", "direction": "up"}
-  {"action": "done"}
-
-RULES:
-1. candidate_id MUST match an [N] from the Interactive elements list.
-2. For login: use <username> and <password> as text values unless specific credentials given.
-3. For navigate: ALWAYS keep the ?seed= parameter from the current URL.
-4. For type: type the EXACT value from constraints. Respect equals/contains/not_contains rules.
-5. For select_option: use the exact option text shown in options=[...].
-6. Choose the SINGLE most effective action. Prefer direct actions over exploration.
-7. If the task is complete, return {"action": "done"}.
-8. NEVER repeat an action that already failed or was already done.
-
-JSON ONLY. No explanation."""
+    return (
+        "You are a web automation agent. Return JSON only (no markdown). "
+        "Keys: action, candidate_id, text, url, evaluation_previous_goal, memory, next_goal.\n"
+        "action: click|type|select_option|navigate|scroll|done. "
+        "click/type/select_option: candidate_id=integer from the Interactive elements list. "
+        "navigate: url=full URL (keep ?seed=X param). "
+        "done: only when task is fully completed.\n"
+        "RULES: Copy values EXACTLY from CREDENTIALS/CONSTRAINTS (include trailing spaces). "
+        "equals->type exact value. not_equals->use any OTHER value. contains->find item with that substring. "
+        "not_contains/not_in->find item WITHOUT that value. greater/less->numeric comparison.\n"
+        "CREDENTIALS: username/email may have trailing spaces - type them exactly as shown in quotes.\n"
+        "MULTI-STEP: complete login first, then the secondary action. Track progress in memory.\n"
+        "TOOLS: Return {\"tool\":\"<name>\",\"args\":{...}} to inspect page. Max 1 tool per step. "
+        "Tools: list_cards({max_cards?,max_text?}); search_text({query}); list_links({}); extract_forms({}).\n"
+        "JSON ONLY. No explanation."
+    )
 
 
 def build_user_prompt(
@@ -59,62 +37,89 @@ def build_user_prompt(
     stuck_warning: str | None = None,
     filled_fields: set[str] | None = None,
     dom_digest: str = "",
+    # New features
+    memory: str = "",
+    next_goal: str = "",
+    state_delta: str = "",
+    cards_preview: str = "",
+    extra_hint: str = "",
 ) -> str:
     parts: list[str] = []
 
     # --- Core task context ---
     parts.append(f"TASK: {prompt}")
 
-    site_line = f"SITE: {website or 'unknown'}"
-    if website_hint:
-        site_line += f" — {website_hint}"
+    site_line = f"TYPE:{task_type} SITE:{website or 'unknown'} STEP:{step_index} of 10"
     parts.append(site_line)
 
-    parts.append(f"TYPE: {task_type}  |  STEP: {step_index} of 12")
-
     # --- Urgency signal ---
-    remaining = max(1, 12 - step_index)
+    remaining = max(1, 10 - step_index)
     if remaining <= 3:
-        parts.append(f"⚠ ONLY {remaining} STEPS LEFT — take the most direct action NOW.")
+        parts.append(f"WARNING: ONLY {remaining} STEPS LEFT - take the most direct action NOW.")
 
-    # --- Constraints ---
-    if constraints_block:
-        parts.append("")
-        parts.append(constraints_block)
+    # --- Website hints ---
+    if website_hint:
+        hint_capped = website_hint[:150] + "..." if len(website_hint) > 150 else website_hint
+        parts.append(f"\nSITE_HINTS: {hint_capped}")
 
     # --- Credentials ---
     if credentials_info:
-        parts.append(f"\nCREDENTIALS: {credentials_info}")
+        parts.append(f"\n{credentials_info}")
+
+    # --- Constraints ---
+    if constraints_block:
+        parts.append(f"\n{constraints_block}")
 
     # --- Playbook ---
     if playbook:
-        parts.append(f"\nPLAYBOOK: {playbook}")
+        playbook_capped = playbook[:350] + "..." if len(playbook) > 350 else playbook
+        parts.append(f"\n{playbook_capped}")
+
+    # --- Page summary (DOM digest, early steps only) ---
+    if dom_digest and step_index <= 1:
+        dom_capped = dom_digest[:200]
+        parts.append(f"\nDOM:\n{dom_capped}")
+
+    # --- Cards preview (early steps only) ---
+    if cards_preview and step_index <= 2:
+        parts.append(f"\nCARDS:\n{cards_preview}")
 
     # --- Warnings ---
     if loop_warning:
-        parts.append(f"\n⚠ {loop_warning}")
+        parts.append(f"\nWARNING: {loop_warning}")
     if stuck_warning:
-        parts.append(f"\n⚠ {stuck_warning}")
+        parts.append(f"\nWARNING: {stuck_warning}")
+    if extra_hint:
+        parts.append(f"\nHINT: {extra_hint}")
 
     # --- Action history ---
     if action_history:
-        history_text = "\n".join(f"  - {h}" for h in action_history)
+        history_text = "\n".join(f"  {h}" for h in action_history)
     else:
         history_text = "  None yet"
     parts.append(f"\nHISTORY:\n{history_text}")
+
+    # --- Memory from previous step ---
+    if memory or next_goal:
+        mem_parts = []
+        if memory:
+            mem_parts.append(f"PREVIOUS MEMORY: {memory}")
+        if next_goal:
+            mem_parts.append(f"PREVIOUS NEXT_GOAL: {next_goal}")
+        parts.append("\n" + "\n".join(mem_parts))
+
+    # --- State delta ---
+    if state_delta:
+        parts.append(f"\nDELTA: {state_delta[:200]}")
 
     # --- Filled fields ---
     if filled_fields:
         parts.append(f"\nALREADY FILLED: {', '.join(sorted(filled_fields))}")
 
-    # --- DOM digest (early steps for orientation) ---
-    if dom_digest and step_index <= 1:
-        parts.append(f"\nPAGE STRUCTURE:\n{dom_digest}")
-
     # --- Page IR (always) ---
-    parts.append(f"\nPAGE ELEMENTS:\n{page_ir_text}")
+    parts.append(f"\nBROWSER_STATE:\n{page_ir_text}")
 
     # --- Final instruction ---
-    parts.append("\nChoose ONE action to make progress. Return JSON only.")
+    parts.append("\nONE JSON action only.")
 
     return "\n".join(parts)

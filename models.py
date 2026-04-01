@@ -58,6 +58,16 @@ class TaskState(BaseModel):
     history: list[ActionRecord] = []
     filled_fields: set[str] = set()
     constraints: list[Constraint] = []
-    task_type: str = "general"
+    task_type: str = "GENERAL"
     login_done: bool = False
+    # Memory/planning persistence across steps
+    memory: str = ""
+    next_goal: str = ""
+    # State delta tracking
+    prev_url: str = ""
+    prev_summary: str = ""
+    prev_sig_set: list[str] = []
+    # Repeat detection
+    last_sig: str = ""
+    repeat_count: int = 0
     model_config = {"arbitrary_types_allowed": True}

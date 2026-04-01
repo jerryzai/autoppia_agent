@@ -1,14 +1,15 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+"""SN36 Apex Agent - FastAPI entry point."""
+from __future__ import annotations
 import logging
+from typing import Any
 
-logger = logging.getLogger(__name__)
+from fastapi import FastAPI, Body
 
 from agent import handle_act
 
-WAIT_ACTION = {"type": "WaitAction", "time_seconds": 1}
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
-app = FastAPI(title="SN36 Apex Agent")
+app = FastAPI(title="SN36 Apex Agent", version="2.0")
 
 
 @app.get("/health")
@@ -17,27 +18,21 @@ async def health():
 
 
 @app.post("/act")
-async def act(request: Request):
-    try:
-        body = await request.json()
-    except Exception:
-        logger.warning("Failed to parse request body")
-        return {"actions": [WAIT_ACTION]}
-
+async def act(payload: dict[str, Any] = Body(...)):
     actions = await handle_act(
-        task_id=body.get("task_id"),
-        prompt=body.get("prompt"),
-        url=body.get("url"),
-        snapshot_html=body.get("snapshot_html"),
-        screenshot=body.get("screenshot"),
-        step_index=body.get("step_index"),
-        web_project_id=body.get("web_project_id"),
-        history=body.get("history"),
+        task_id=payload.get("task_id"),
+        prompt=payload.get("prompt") or payload.get("task_prompt"),
+        url=payload.get("url"),
+        snapshot_html=payload.get("snapshot_html"),
+        screenshot=payload.get("screenshot"),
+        step_index=payload.get("step_index"),
+        web_project_id=payload.get("web_project_id"),
+        history=payload.get("history"),
+        relevant_data=payload.get("relevant_data") if isinstance(payload.get("relevant_data"), dict) else None,
     )
     return {"actions": actions}
 
 
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Unhandled exception: {type(exc).__name__}: {exc}")
-    return JSONResponse(status_code=200, content={"actions": [WAIT_ACTION]})
+@app.post("/step")
+async def step(payload: dict[str, Any] = Body(...)):
+    return await act(payload)
