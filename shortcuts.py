@@ -95,6 +95,74 @@ def try_quick_click(prompt: str, url: str, seed: str | None, step: int) -> list[
     if m and port == 8008:
         return _click("id", "post_like_button_p1")
 
+    # Navbar hires (autowork 8009)
+    if port == 8009 and re.search(r"hires.*navbar|navbar.*hires", t):
+        return _click("href", f"/hires?seed={seed}") if seed else None
+
+    # Book a consultation (autowork 8009)
+    if port == 8009 and re.search(r"book\s+a?\s+consultation|consultation", t):
+        return _click_xpath("//*[contains(@id, 'book-consultation-button')]")
+
+    # About page (autodining 8003)
+    if port == 8003 and re.search(r"about\s+page|navigate.*about.*information", t):
+        return _click("id", "about-menu-item")
+
+    # View cart (autozone 8002)
+    if port == 8002 and re.search(r"shopping\s+cart|contents\s+of\s+my", t):
+        return _click("id", "cart-icon")
+
+    # View pending events (autocrm 8004) — 2-step: nav → toggle future
+    if port == 8004 and "pending" in t and "event" in t:
+        if step == 0:
+            return _click("id", "appointments-nav")
+        elif step == 1:
+            return _click("id", "toggle-future-events")
+        return []
+
+    # Enter / search location (autodrive 8012)
+    if port == 8012:
+        _loc_xpath = (
+            "//input[contains(@placeholder, 'Pickup location') or "
+            "contains(@placeholder, 'Where from?') or "
+            "contains(@placeholder, 'Enter pickup') or "
+            "contains(@placeholder, 'Start location') or "
+            "contains(@placeholder, 'Where are you?')]"
+        )
+        if re.search(r"search\s+location", t):
+            m2 = re.search(r"(?:for |details for )['\"]([^'\"]+)['\"]", prompt)
+            if m2:
+                if step == 0:
+                    return _click_xpath(_loc_xpath)
+                elif step == 1:
+                    return [{"type": "TypeAction", "text": m2.group(1),
+                             "selector": {"type": "xpathSelector", "value": _loc_xpath}}]
+                return []
+        if re.search(r"enter.*location|select\s+a\s+location", t):
+            if step == 0:
+                return _click_xpath(_loc_xpath)
+            return []
+
+    # Create label (automail 8005) — 3-step
+    if port == 8005 and "create" in t and "label" in t:
+        if step == 0:
+            return _click_xpath("//*[contains(@id, 'label-trigger') or contains(@id, 'tag-trigger')]")
+        elif step == 1:
+            m2 = re.search(r"(?:equal to |equals? |CONTAINS )['\"]([^'\"]+)['\"]", prompt)
+            label_text = m2.group(1) if m2 else "label"
+            return [{"type": "TypeAction", "text": label_text,
+                     "selector": {"type": "xpathSelector",
+                                  "value": "//input[contains(@id, 'label-trigger') or contains(@id, 'tag-trigger')]"}}]
+        elif step == 2:
+            return _click_xpath("//button[contains(@id, 'add-label-btn') or contains(@id, 'add-label-button')]")
+        return []
+
+    # Search delivery restaurant (autodelivery 8006)
+    if port == 8006 and "search" in t and "restaurant" in t:
+        m2 = re.search(r"(?:exactly |query is |query equals? )['\"]([^'\"]+)['\"]", prompt)
+        if m2 and step == 0:
+            return [{"type": "TypeAction", "text": m2.group(1), "selector": _sel_attr("id", "find-food")}]
+        return []
+
     # WRITE_JOB_TITLE: open Post a Job form on AutoHire (port 8009)
     # Agent historically navigates to /jobs (listings) instead of opening the posting form
     if port == 8009 and re.search(r"writing.*title.*job|job.*posting.*job_title|strong.*title.*posting", t):
