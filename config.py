@@ -133,7 +133,8 @@ WEBSITE_HINTS: dict[str, str] = {
         "Feed: posts with text, author, Like/Comment buttons. Comment: text field + submit. "
         "Jobs section: job listings with title, company, location, Apply button. "
         "My Applications: list with status (Pending/Accepted/Rejected), Withdraw/Cancel button. "
-        "Company Pages: Follow/Unfollow button on each page. "
+        "Company Pages: IMPORTANT - navigate here via 'Companies' or 'Pages' nav link to find Follow/Unfollow buttons. "
+        "Each company page has a Follow/Unfollow button — click Unfollow to unfollow. "
         "People/Users: search bar for users. "
         "Profile: Edit profile (bio, skills, photo). "
         "Back to Jobs: breadcrumb or Back button from job detail."
@@ -199,8 +200,12 @@ WEBSITE_HINTS: dict[str, str] = {
         "Date range selectors, metric dropdowns."
     ),
     "autodiscord": (
-        "Chat application. Server list, channels, messages, user search, "
-        "server management. Channel messages in main panel."
+        "Chat application (Discord-style). NAV: Server list on left, channels panel, main chat area. "
+        "Server list: clickable server icons on far left sidebar. "
+        "Voice channels: show connected users and mute/unmute controls. "
+        "Mute toggle: look for microphone icon or mute button in voice channel or bottom toolbar. "
+        "Select server: click a server icon from the server list on the left sidebar. "
+        "IMPORTANT: If page appears blank/loading, wait 2s then try clicking the first server icon."
     ),
 }
 
@@ -245,7 +250,7 @@ TASK_PLAYBOOKS: dict[str, str] = {
     "ARCHIVE_EMAIL": "PLAYBOOK: 1) Browse the inbox. 2) Find email matching constraints. 3) Click on that email. 4) Find Archive button. Click it.",
     "DELETE_EMAIL": "PLAYBOOK: 1) Find the email matching constraints. 2) Click the Delete/Trash icon on that email row.",
     "ADD_LABEL": "PLAYBOOK: 1) Find the email matching ALL TASK_CONSTRAINTS. 2) Open that email or select it. 3) Find the Label option. 4) Select a label that is NOT the excluded label_name.",
-    "FORWARD_EMAIL": "PLAYBOOK: 1) Find the email matching constraints. 2) Click to open. 3) Click Forward button. 4) Fill in To field if needed. 5) Send.",
+    "FORWARD_EMAIL": "PLAYBOOK: 1) Use the search bar to find the email: type sender name or subject keywords from constraints into the search input (id='mail-search'). 2) Wait briefly for results. 3) Click the matching email in the results. 4) Wait briefly. 5) Click the Forward button. 6) Fill in the recipient 'To' field with a value satisfying constraints (use not_equals constraint to pick a DIFFERENT address). 7) Click Send/Forward.",
     "MARK_EMAIL_AS_IMPORTANT": "PLAYBOOK: 1) Find the email matching constraints. 2) Click the Important/Flag icon on that email.",
     "EDIT_DRAFT_EMAIL": "PLAYBOOK: 1) Navigate to Drafts folder. 2) Find draft matching constraints. 3) Click to open/edit the draft.",
     "EMAILS_NEXT_PAGE": "PLAYBOOK: 1) Look at the bottom of the email list for pagination. 2) Click the Next arrow/button.",
@@ -254,10 +259,10 @@ TASK_PLAYBOOKS: dict[str, str] = {
     "TEMPLATE_SENT": "PLAYBOOK: 1) Navigate to Templates section. 2) Find template matching constraints. 3) Click Send or Use Template.",
     "TEMPLATE_SAVED_DRAFT": "PLAYBOOK: 1) Navigate to Templates section. 2) Find template matching constraints. 3) Click Save as Draft.",
     "TEMPLATE_SELECTED": "PLAYBOOK: 1) Navigate to Templates section. 2) Find the template matching constraints. 3) Click Select or Use.",
-    "SELECT_WEEK": "PLAYBOOK: 1) Find the view switcher buttons. 2) Click Week button.",
-    "SELECT_MONTH": "PLAYBOOK: 1) Find view buttons. 2) Click Month button.",
-    "SELECT_DAY": "PLAYBOOK: 1) Find view buttons. 2) Click Day button.",
-    "SELECT_FIVE_DAYS": "PLAYBOOK: 1) Find view buttons. 2) Click 5-day or Work Week button.",
+    "SELECT_WEEK": "PLAYBOOK: 1) Click the calendar view selector button (aria-label='Select calendar view'). 2) Click 'Select Week view' or 'Week' option.",
+    "SELECT_MONTH": "PLAYBOOK: 1) Click the calendar view selector button (aria-label='Select calendar view'). 2) Click 'Select Month view' or 'Month' option.",
+    "SELECT_DAY": "PLAYBOOK: 1) Click the calendar view selector button (aria-label='Select calendar view'). 2) Click 'Select Day view' or 'Day' option.",
+    "SELECT_FIVE_DAYS": "PLAYBOOK: 1) Click the calendar view selector button (aria-label='Select calendar view'). 2) Click 'Select 5 Day view' or '5 Day' or 'Work Week' option.",
     "ADD_NEW_CALENDAR": "PLAYBOOK: 1) Find the + or Add Calendar button in the left sidebar. 2) Click it to open the modal.",
     "CREATE_CALENDAR": "PLAYBOOK: 1) Click the + button next to Other calendars. 2) Fill in name and description satisfying constraints. 3) Click Create/Save.",
     "EVENT_ADD_ATTENDEE": "PLAYBOOK: 1) Find an event on the calendar. 2) Click on it to open. 3) Click Edit. 4) Find Add Attendee field. 5) Type email satisfying constraints. 6) Save.",
@@ -285,7 +290,7 @@ TASK_PLAYBOOKS: dict[str, str] = {
     "VIEW_DOCTOR_EDUCATION": "PLAYBOOK: 1) Browse doctors list. 2) Find doctor matching ALL constraints. 3) Click on doctor's card. 4) Find Education tab/section. 5) Click it.",
     "COMMENT_ON_POST": "PLAYBOOK: 1) Find a post in the feed. 2) Click the Comment button. 3) Type the EXACT comment text. 4) Submit.",
     "FOLLOW_PAGE": "PLAYBOOK: 1) Find the company page matching constraints. 2) Click the Follow button.",
-    "UNFOLLOW_PAGE": "PLAYBOOK: 1) Find the company page. 2) Click Unfollow.",
+    "UNFOLLOW_PAGE": "PLAYBOOK: 1) Navigate to Company Pages section (look for 'Companies' or 'Pages' in nav). 2) Find a company page where the recommendation does NOT match any excluded name constraint. 3) Click 'Unfollow' on that page. NOTE: Do NOT stay on the feed/home page - navigate to Company Pages explicitly.",
     "CANCEL_APPLICATION": "PLAYBOOK: 1) Navigate to My Applications or Jobs. 2) Find the application matching constraints. 3) Click Withdraw/Cancel.",
     "SEARCH_USERS": "PLAYBOOK: 1) Find the user search bar. 2) Type the query. 3) Submit.",
     "BACK_TO_ALL_JOBS": "PLAYBOOK: 1) Navigate to Jobs section. 2) Find a job satisfying constraints. 3) Click on it. 4) Find and click Back to all jobs link.",
@@ -335,7 +340,7 @@ TASK_PLAYBOOKS: dict[str, str] = {
     "ADD_NEW_MATTER": "PLAYBOOK: 1) Navigate to Matters section. 2) Click Add New Matter. 3) Fill form. 4) Save.",
     "SORT_MATTER_BY_CREATED_AT": "PLAYBOOK: 1) Navigate to Matters list. 2) Find the created_at column header. 3) Click it to sort.",
     "CHANGE_USER_NAME": "PLAYBOOK: 1) Navigate to Settings or Profile. 2) Find the user name field. 3) Set it to the specified value. 4) Save.",
-    "WRITE_JOB_TITLE": "PLAYBOOK: 1) Look for Post a Job or + button. 2) Click it. 3) Type the EXACT job title from TASK_CREDENTIALS. 4) Do NOT click submit.",
+    "WRITE_JOB_TITLE": "PLAYBOOK: 1) Find and click the 'Post a Job' button or '+' icon on the AutoHire page. 2) A job posting form/modal should open. 3) Find the job title input field. 4) Type a job title that satisfies ALL constraints (if NOT constraint, type any title EXCEPT the excluded value). 5) Do NOT click submit/post — just type the title.",
     "ENTER_DESTINATION": "PLAYBOOK: 1) Find the destination input field. 2) Click to focus. 3) Clear if pre-filled. 4) Type a valid destination DIFFERENT from the NOT constraint. 5) Confirm.",
     "ENTER_LOCATION": "PLAYBOOK: 1) Find the location/pickup input field. 2) Click to focus. 3) Type the EXACT location from TASK_CONSTRAINTS. 4) Click matching autocomplete suggestion. 5) Confirm.",
     "SEARCH_RIDE": "PLAYBOOK: 1) On AutoRide, find the ride search/filter interface. 2) Apply filters or scroll to find ride matching ALL constraints. 3) Click on matching ride.",
@@ -358,10 +363,10 @@ TASK_PLAYBOOKS: dict[str, str] = {
     "APPLY_FOR_JOB": "PLAYBOOK: 1) Browse job listings. 2) Find job matching ALL constraints. 3) Click to open. 4) Click Apply.",
     "SEARCH_SUBMIT": "PLAYBOOK: 1) Find search input. 2) Type query from TASK_CONSTRAINTS. 3) Submit.",
     "EVENT_WIZARD_OPEN": "PLAYBOOK: 1) Find Add Event button. 2) Click it to open wizard. 3) If title field appears, type title satisfying constraints.",
-    "CELL_CLICKED": "PLAYBOOK: 1) Switch to 5 days view. 2) Find a cell matching date/time constraints. 3) Click on that cell.",
+    "CELL_CLICKED": "PLAYBOOK: 1) Check the task constraints for the required view (Month or 5-day). 2) Switch to the correct view by clicking the view selector. 3) If Month view: navigate to the correct month (use Previous/Next arrows) then click the date cell matching constraints. 4) If 5-day view: navigate to the correct week then click the time cell. NOTE: constraints may specify date BEFORE/AFTER a value — pick any valid date satisfying the constraint.",
     "EVENT_REMOVE_ATTENDEE": "PLAYBOOK: 1) Find an event. 2) Click to open. 3) Find attendees list. 4) Find attendee NOT matching excluded email. 5) Click Remove.",
     "SELECT_TODAY": "PLAYBOOK: 1) Find the focus-today button. 2) Click it.",
-    "AUTOLIST_SELECT_TASK_PRIORITY": "PLAYBOOK: 1) Find task with priority NOT the excluded value. 2) Click priority selector. 3) Select High or target value. 4) Save.",
+    "AUTOLIST_SELECT_TASK_PRIORITY": "PLAYBOOK: 1) Browse the EXISTING task list (do NOT create a new task). 2) Find an existing task in the list. 3) Click on that task's priority badge/selector (NOT the add-task button). 4) Select the target priority value (e.g. 'Low', 'Medium', 'High'). 5) Save/confirm.",
     "AUTOLIST_CANCEL_TASK_CREATION": "PLAYBOOK: 1) Click Add Task. 2) Fill fields as specified. 3) Click Cancel/Discard instead of Submit.",
     "AUTOLIST_TEAM_CREATED": "PLAYBOOK: 1) Navigate to Teams section. 2) Click Create Team. 3) Fill fields satisfying constraints. 4) Save.",
     "AUTOLIST_COMPLETE_TASK": "PLAYBOOK: 1) Find task matching ALL constraints. 2) Click Complete/checkmark button. 3) Confirm.",
@@ -394,9 +399,9 @@ TASK_PLAYBOOKS: dict[str, str] = {
     "DELETE_REVIEW": "PLAYBOOK: 1) Find restaurant matching constraints. 2) Open it. 3) Find review matching constraints. 4) Click Delete. 5) Confirm.",
     "RESTAURANT_FILTER": "PLAYBOOK: 1) Find cuisine filter. 2) Apply filter satisfying constraints.",
     "ADD_TO_CART_MENU_ITEM": "PLAYBOOK: 1) Browse restaurants. 2) Find restaurant. 3) Find menu item matching constraints. 4) Add to cart.",
-    "ADD_TO_CART_MODAL_OPEN": "PLAYBOOK: 1) Find restaurant matching constraints. 2) Click to view menu. 3) Find menu item matching price constraint. 4) Click to open add-to-cart modal.",
+    "ADD_TO_CART_MODAL_OPEN": "PLAYBOOK: 1) Navigate to the restaurant whose name matches (CONTAINS) the restaurant constraint. 2) Click on that restaurant to open its menu. 3) Scroll through menu items. 4) Find the specific menu item whose name CONTAINS the item_name constraint. 5) Click on that item to open the add-to-cart modal (NOT the Add to Cart button directly).",
     "QUICK_ORDER_STARTED": "PLAYBOOK: 1) Find Quick Order button on any restaurant card. 2) Click it.",
-    "FAQ_OPENED": "PLAYBOOK: 1) Navigate to FAQ page. 2) Find FAQ item matching constraint. 3) Click to expand.",
+    "FAQ_OPENED": "PLAYBOOK: 1) Navigate to Help/FAQ page (find Help or FAQ link in nav). 2) Find the FAQ question item that CONTAINS the specified text (e.g. 'How do'). 3) Click the expand/toggle button (chevron/arrow icon) on that FAQ item — NOT the question text itself. 4) The item should expand to show the answer.",
     "MESSAGE_HOST": "PLAYBOOK: 1) Find hotel matching ALL constraints. 2) Click to open. 3) Find Message Host button. 4) Type message. 5) Send.",
     "EDIT_CHECK_IN_OUT_DATES": "PLAYBOOK: 1) Find listing matching constraints. 2) Open booking form. 3) Modify dates. 4) Save.",
     "WISHLIST_OPENED": "PLAYBOOK: 1) Find Wishlist/Saved Hotels icon. 2) Click to open.",
@@ -440,6 +445,24 @@ TASK_PLAYBOOKS: dict[str, str] = {
     "EDIT_TASK": "PLAYBOOK: 1) Find task matching constraints. 2) Click Edit. 3) Update fields. 4) Save.",
     "COMPLETE_TASK": "PLAYBOOK: 1) Find task matching constraints. 2) Click Complete/Done/Checkmark.",
     "JOB_POSTING": "PLAYBOOK: 1) Find Post a Job button. 2) Click it. 3) Type EXACT job title. 4) Submit.",
+    # AutoDiscord (8015) task types
+    "VOICE_MUTE_TOGGLE": "PLAYBOOK: 1) If page blank, wait 2s. 2) Click a server icon from the left sidebar to enter a server. 3) Find a voice channel. 4) Look for the microphone/mute icon at the bottom toolbar or in the voice channel. 5) Click it to toggle mute. Ensure muted state satisfies constraint (muted=True or muted=False).",
+    "SELECT_SERVER": "PLAYBOOK: 1) If page blank, wait 2s. 2) Find the server list icons on the far left sidebar. 3) Find a server satisfying constraints. 4) Click on that server icon to select it.",
+    "SEND_MESSAGE": "PLAYBOOK: 1) If page blank, wait 2s. 2) Click a server from the left sidebar. 3) Click a channel from the channel list. 4) Find the message input box at the bottom. 5) Type a message satisfying constraints. 6) Press Enter or click Send.",
+    # AutoStats / blockchain (8014) task types
+    "VIEW_BLOCK": "PLAYBOOK: 1) Navigate to Blocks/Blockchain section. 2) Find the search/filter input. 3) Enter the epoch value satisfying constraints (e.g. >= value). 4) Scroll through results to find a block where BOTH epoch and eventsCount satisfy constraints. 5) Click on the matching block to view details.",
+    # Subnet-related task types
+    "FAVORITE_SUBNET": "PLAYBOOK: 1) Navigate to the subnets/network list. 2) Find a subnet where subnet_name does NOT match any excluded constraint. 3) Click the favorite/star/bookmark icon on that subnet.",
+    # Profile experience task types
+    "ADD_EXPERIENCE": "PLAYBOOK: 1) Navigate to user profile/settings. 2) Find the Experience or Work History section. 3) Click Add Experience/+ button. 4) Fill in company, title, location, description fields satisfying ALL constraints. 5) Submit/Save.",
+    # Wallet disconnect
+    "DISCONNECT_WALLET": "PLAYBOOK: 1) Navigate to Settings or Wallet section. 2) Find the connected wallet matching constraints (wallet_name). 3) Click Disconnect on that wallet. 4) Confirm if prompted.",
+    # Settings navigation
+    "OPEN_SETTINGS": "PLAYBOOK: 1) Find Settings link in the navigation or user menu (look for gear icon or 'Settings' text). 2) Click it to open the settings page.",
+    # AutoLodge navigation
+    "BACK_TO_ALL_HOTELS": "PLAYBOOK: 1) Navigate to hotel listings. 2) Find a hotel satisfying ALL constraints. 3) Click on it to open the detail page. 4) Find 'Back' or 'Back to all hotels' button/link. 5) Click it.",
+    # AutoDining guest selector
+    "PEOPLE_SELECTED": "PLAYBOOK: 1) Find the guest/people count selector on the main dining search form. 2) Click on it to open the dropdown. 3) Select the number satisfying constraints. 4) Confirm. NOTE: The selector may be labeled 'Guests', 'People', or show a number — click it then select from the dropdown options.",
     "GENERAL": "PLAYBOOK: Analyze the task carefully, identify the key action required, and execute the most direct path. Use TASK_CONSTRAINTS to find the correct item and fill forms.",
 }
 

@@ -566,6 +566,44 @@ def classify_task_type(prompt: str) -> str:
     if re.search(r"create\s+a\s+new\s+label", t, re.IGNORECASE):
         return "CREATE_LABEL"
 
+    # ---- AutoDiscord (8015) ----
+    if re.search(r"(toggle|change|switch)\s+.*mute|mute.*toggle|muted\s+(should\s+be|=|equals|to)\s+'?(true|false)", t, re.IGNORECASE):
+        return "VOICE_MUTE_TOGGLE"
+    if re.search(r"(select|choose|click)\s+(a\s+)?server", t, re.IGNORECASE):
+        return "SELECT_SERVER"
+    if re.search(r"send\s+(a\s+)?message\s+in\s+the\s+channel|send\s+message\s+where", t, re.IGNORECASE):
+        return "SEND_MESSAGE"
+
+    # ---- Blockchain / AutoStats (8014) ----
+    if re.search(r"(view|show|find)\s+(a\s+)?block\s+where|block.*epoch|epoch.*eventscount", t, re.IGNORECASE):
+        return "VIEW_BLOCK"
+
+    # ---- Subnet / network ----
+    if re.search(r"(favorite|star|bookmark)\s+(a\s+)?subnet|subnet.*favorite", t, re.IGNORECASE):
+        return "FAVORITE_SUBNET"
+
+    # ---- Profile experience ----
+    if re.search(r"add\s+(an?\s+)?experience\s+(at|where|to)", t, re.IGNORECASE):
+        return "ADD_EXPERIENCE"
+
+    # ---- Wallet ----
+    if re.search(r"disconnect\s+(the\s+)?wallet", t, re.IGNORECASE):
+        return "DISCONNECT_WALLET"
+
+    # ---- Settings ----
+    if re.search(r"open\s+(the\s+)?settings\s+page|navigate\s+to\s+settings", t, re.IGNORECASE):
+        return "OPEN_SETTINGS"
+
+    # ---- AutoLodge back navigation ----
+    if re.search(r"back\s+to\s+(all\s+)?hotels|go\s+back.*hotel\s+list", t, re.IGNORECASE):
+        return "BACK_TO_ALL_HOTELS"
+
+    # ---- AutoDining guest selector ----
+    if re.search(r"(select|choose|set)\s+(\d+\s+)?(people|guests?|persons?)\s+(in\s+the|from\s+the|using\s+the)\s+(dropdown|selector|picker)", t, re.IGNORECASE):
+        return "PEOPLE_SELECTED"
+    if re.search(r"people\s+(count|selector|dropdown|field)\s+.*select|open\s+the\s+people\s+(dropdown|selector)", t, re.IGNORECASE):
+        return "PEOPLE_SELECTED"
+
     # ---- Task management ----
     if re.search(r"delete\s+task\b", t, re.IGNORECASE):
         return "DELETE_TASK"

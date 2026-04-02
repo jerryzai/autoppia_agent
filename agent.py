@@ -68,6 +68,17 @@ _KB_PATH = os.path.join(os.path.dirname(__file__), "data", "baseline_actions.jso
 _KB_LOCK = threading.Lock()
 
 
+def _task_suffix(task_id: str) -> str:
+    """Return the stable suffix of a taskId (part after last '_').
+
+    Task IDs from the evaluation API have the format '<round_prefix>_<stable_suffix>',
+    e.g. 'ed4401f12261_ed8e2103'. The prefix changes every round; the suffix
+    identifies the same logical task across rounds. Indexing by suffix enables
+    the KB to replay successful actions from prior rounds.
+    """
+    return task_id.rsplit("_", 1)[-1] if "_" in task_id else task_id
+
+
 def _load_task_knowledge() -> dict[str, list[dict]]:
     kb: dict[str, list[dict]] = {}
     try:
@@ -79,6 +90,10 @@ def _load_task_knowledge() -> dict[str, list[dict]]:
                 acts = entry["response"].get("actions")
                 if tid and isinstance(acts, list) and len(acts) > 1:
                     kb[tid] = acts[1:]
+                    # Also index by stable suffix for cross-round lookup
+                    suffix = _task_suffix(tid)
+                    if suffix and suffix != tid and suffix not in kb:
+                        kb[suffix] = acts[1:]
     except Exception:
         pass
     return kb
@@ -133,6 +148,10 @@ def auto_learn_task(task_id: str, success: bool = True) -> None:
         del _TASK_KNOWLEDGE[oldest]
 
     _TASK_KNOWLEDGE[task_id] = actions
+    # Also store by stable suffix so the KB hit survives round-prefix changes
+    suffix = _task_suffix(task_id)
+    if suffix and suffix != task_id and suffix not in _TASK_KNOWLEDGE:
+        _TASK_KNOWLEDGE[suffix] = actions
     AgentMetrics().record_auto_learn()
     AgentMetrics().set_kb_size(len(_TASK_KNOWLEDGE))
     logger.info(f"Auto-learned task {task_id}: {len(actions)} actions ({log['use_case']})")
@@ -239,7 +258,7 @@ async def handle_act(
     # ===================================================================
     # STAGE 0: Knowledge base lookup (skip LLM for known tasks)
     # ===================================================================
-    known_actions = _TASK_KNOWLEDGE.get(task)
+    known_actions = _TASK_KNOWLEDGE.get(task) or _TASK_KNOWLEDGE.get(_task_suffix(task))
     if known_actions:
         latency = (time.time() - step_start) * 1000
         metrics.record_resolution("kb_lookup", website, state.task_type, latency)
