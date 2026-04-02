@@ -10,15 +10,16 @@ def build_system_prompt() -> str:
         "click/type/select_option: candidate_id=integer from the Interactive elements list. "
         "navigate: url=full URL (keep ?seed=X param). "
         "done: only when task is fully completed.\n"
-        "CONSTRAINT RULES (CRITICAL):\n"
-        "- equals: type/select the EXACT value. Match precisely.\n"
-        "- not_equals: SKIP items with that value. Pick ANY OTHER item instead.\n"
-        "- contains: find item where the field has that substring.\n"
-        "- not_contains: SKIP items where the field has that substring.\n"
-        "- greater/less/>=/<= : compare numerically (or by date/time for date fields).\n"
-        "- When multiple constraints exist, ALL must be satisfied simultaneously.\n"
-        "- For NOT constraints: scan visible items, pick the FIRST that does NOT match the excluded value.\n"
-        "CREDENTIALS: type values EXACTLY as shown in quotes (include spaces).\n"
+        "CONSTRAINT RULES: "
+        "equals->type/select EXACT value. "
+        "not_equals->pick any OTHER value (not the excluded one). "
+        "contains->find row/item whose field contains that substring. "
+        "not_contains/not_in->find row/item whose field does NOT contain that value. "
+        "greater_than/less_than->compare numeric values, pick one satisfying the comparison. "
+        "greater_equal/less_equal->inclusive numeric comparison.\n"
+        "BROWSING: For list/table tasks, scroll to find items matching constraints. "
+        "For NOT constraints, pick the FIRST item that does NOT match the excluded value. "
+        "CREDENTIALS: type username/email/password EXACTLY as shown (including spaces).\n"
         "MULTI-STEP: complete login first, then the secondary action. Track progress in memory.\n"
         "TOOLS: Return {\"tool\":\"<name>\",\"args\":{...}} to inspect page. Max 1 tool per step. "
         "Tools: list_cards({max_cards?,max_text?}); search_text({query}); list_links({}); extract_forms({}).\n"
@@ -62,10 +63,9 @@ def build_user_prompt(
     if remaining <= 3:
         parts.append(f"WARNING: ONLY {remaining} STEPS LEFT - take the most direct action NOW.")
 
-    # --- Website hints (step-aware truncation) ---
-    if website_hint and step_index <= 2:
-        hint_cap = 400 if step_index == 0 else 200
-        hint_capped = website_hint[:hint_cap] + "..." if len(website_hint) > hint_cap else website_hint
+    # --- Website hints ---
+    if website_hint:
+        hint_capped = website_hint[:400] + "..." if len(website_hint) > 400 else website_hint
         parts.append(f"\nSITE_HINTS: {hint_capped}")
 
     # --- Credentials ---
@@ -78,7 +78,7 @@ def build_user_prompt(
 
     # --- Playbook ---
     if playbook:
-        playbook_capped = playbook[:350] + "..." if len(playbook) > 350 else playbook
+        playbook_capped = playbook[:500] + "..." if len(playbook) > 500 else playbook
         parts.append(f"\n{playbook_capped}")
 
     # --- Page summary (DOM digest, early steps only) ---
@@ -86,11 +86,9 @@ def build_user_prompt(
         dom_capped = dom_digest[:200]
         parts.append(f"\nDOM:\n{dom_capped}")
 
-    # --- Cards preview (all steps, shorter on later steps) ---
-    if cards_preview:
-        cap = 600 if step_index <= 2 else 350
-        capped = cards_preview[:cap] + "..." if len(cards_preview) > cap else cards_preview
-        parts.append(f"\nCARDS:\n{capped}")
+    # --- Cards preview (early steps only) ---
+    if cards_preview and step_index <= 2:
+        parts.append(f"\nCARDS:\n{cards_preview}")
 
     # --- Warnings ---
     if loop_warning:

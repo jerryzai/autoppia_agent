@@ -70,132 +70,19 @@ def try_quick_click(prompt: str, url: str, seed: str | None, step: int) -> list[
     if re.search(r"clear\s+(the\s+)?(current\s+)?selection", t):
         return _click_xpath("(//button[@role='checkbox'])[1]")
 
-    # About page feature (multi-step)
-    if re.search(r"about\s+page.*feature|feature.*about\s+page", t):
+    # About page feature (multi-step) - navigate then let LLM find the feature
+    if re.search(r"about\s+page.*feature|feature.*about\s+page|feature.*on\s+the\s+about\s+page", t):
         if step == 0:
             return _click("id", "nav-about")
         elif step == 1:
             return [{"type": "ScrollAction", "down": True}]
-        else:
-            # Extract the required feature text from the prompt instead of hardcoding
-            m = re.search(
-                r"(?:contains|equals|is|=)\s+['\"]([^'\"]+)['\"]",
-                prompt, re.IGNORECASE,
-            )
-            if m:
-                feature_text = m.group(1).replace("'", "\\'")
-                return _click_xpath(
-                    f"//*[contains(text(),'{feature_text}')]"
-                    f" | //*[contains(@class,'feature') and .//*[contains(text(),'{feature_text}')]]"
-                )
-            return None  # Let LLM handle if feature text can't be extracted
+        # step 2+: let LLM click the correct feature card (varies by constraint)
+        return None
 
     # Like a post (autoconnect)
     m = re.search(r"like\s+(?:the\s+)?(?:post|first\s+post|latest\s+post)", t)
     if m and port == 8008:
         return _click("id", "post_like_button_p1")
-
-    # Navbar hires (autowork 8009)
-    if port == 8009 and re.search(r"hires.*navbar|navbar.*hires", t):
-        return _click("href", f"/hires?seed={seed}") if seed else None
-
-    # Book a consultation (autowork 8009)
-    if port == 8009 and re.search(r"book\s+a?\s+consultation|consultation", t):
-        return _click_xpath("//*[contains(@id, 'book-consultation-button')]")
-
-    # About page (autodining 8003)
-    if port == 8003 and re.search(r"about\s+page|navigate.*about.*information", t):
-        return _click("id", "about-menu-item")
-
-    # View cart (autozone 8002)
-    if port == 8002 and re.search(r"shopping\s+cart|contents\s+of\s+my", t):
-        return _click("id", "cart-icon")
-
-    # View pending events (autocrm 8004) — 2-step: nav → toggle future
-    if port == 8004 and "pending" in t and "event" in t:
-        if step == 0:
-            return _click("id", "appointments-nav")
-        elif step == 1:
-            return _click("id", "toggle-future-events")
-        return []
-
-    # Enter / search location (autodrive 8012)
-    if port == 8012:
-        _loc_xpath = (
-            "//input[contains(@placeholder, 'Pickup location') or "
-            "contains(@placeholder, 'Where from?') or "
-            "contains(@placeholder, 'Enter pickup') or "
-            "contains(@placeholder, 'Start location') or "
-            "contains(@placeholder, 'Where are you?')]"
-        )
-        if re.search(r"search\s+location", t):
-            m2 = re.search(r"(?:for |details for )['\"]([^'\"]+)['\"]", prompt)
-            if m2:
-                if step == 0:
-                    return _click_xpath(_loc_xpath)
-                elif step == 1:
-                    return [{"type": "TypeAction", "text": m2.group(1),
-                             "selector": {"type": "xpathSelector", "value": _loc_xpath}}]
-                return []
-        if re.search(r"enter.*location|select\s+a\s+location", t):
-            if step == 0:
-                return _click_xpath(_loc_xpath)
-            return []
-
-    # Create label (automail 8005) — 3-step
-    if port == 8005 and "create" in t and "label" in t:
-        if step == 0:
-            return _click_xpath("//*[contains(@id, 'label-trigger') or contains(@id, 'tag-trigger')]")
-        elif step == 1:
-            m2 = re.search(r"(?:equal to |equals? |CONTAINS )['\"]([^'\"]+)['\"]", prompt)
-            label_text = m2.group(1) if m2 else "label"
-            return [{"type": "TypeAction", "text": label_text,
-                     "selector": {"type": "xpathSelector",
-                                  "value": "//input[contains(@id, 'label-trigger') or contains(@id, 'tag-trigger')]"}}]
-        elif step == 2:
-            return _click_xpath("//button[contains(@id, 'add-label-btn') or contains(@id, 'add-label-button')]")
-        return []
-
-    # Search delivery restaurant (autodelivery 8006)
-    if port == 8006 and "search" in t and "restaurant" in t:
-        m2 = re.search(r"(?:exactly |query is |query equals? )['\"]([^'\"]+)['\"]", prompt)
-        if m2 and step == 0:
-            return [{"type": "TypeAction", "text": m2.group(1), "selector": _sel_attr("id", "find-food")}]
-        return []
-
-    # WRITE_JOB_TITLE: open Post a Job form on AutoHire (port 8009)
-    # Agent historically navigates to /jobs (listings) instead of opening the posting form
-    if port == 8009 and re.search(r"writing.*title.*job|job.*posting.*job_title|strong.*title.*posting", t):
-        if step == 0:
-            return _click_xpath(
-                "//button[contains(normalize-space(.),'Post a Job') or contains(normalize-space(.),'Post Job')]"
-                " | //*[contains(@id,'post-job') or contains(@id,'post_job') or contains(@id,'create-job') or contains(@id,'job-post')]"
-            )
-        # step >= 1: let LLM type the title value from constraints
-        return None
-
-    # Calendar view switching (SELECT_DAY / SELECT_WEEK / SELECT_MONTH / SELECT_FIVE_DAYS)
-    # Confirmed from evaluation data: always 2 actions: open view selector → click target view
-    if re.search(r"switch\s+to\s+day\s+view", t):
-        if step == 0:
-            return _click("aria-label", "Select calendar view")
-        elif step == 1:
-            return _click("aria-label", "Select Day view")
-    if re.search(r"switch\s+to\s+week\s+view", t):
-        if step == 0:
-            return _click("aria-label", "Select calendar view")
-        elif step == 1:
-            return _click("aria-label", "Select Week view")
-    if re.search(r"switch\s+to\s+month\s+view", t):
-        if step == 0:
-            return _click("aria-label", "Select calendar view")
-        elif step == 1:
-            return _click("aria-label", "Select Month view")
-    if re.search(r"switch\s+to\s+(5.?day|five.?day|work.?week)\s+view", t):
-        if step == 0:
-            return _click("aria-label", "Select calendar view")
-        elif step == 1:
-            return _click("aria-label", "Select 5 Day view")
 
     return None
 
@@ -226,7 +113,7 @@ def is_already_logged_in(soup: BeautifulSoup) -> bool:
     return any(ind in text for ind in indicators)
 
 
-def detect_login_fields(candidates: list[Candidate], creds: dict | None = None) -> list[dict] | None:
+def detect_login_fields(candidates: list[Candidate]) -> list[dict] | None:
     username = password = submit = None
 
     for c in candidates:
@@ -254,12 +141,9 @@ def detect_login_fields(candidates: list[Candidate], creds: dict | None = None) 
                 submit = c
 
     if username and password and submit:
-        _creds = creds or {}
-        uname_val = _creds.get("username", "<username>")
-        passwd_val = _creds.get("password", "<password>")
         return [
-            {"type": "TypeAction", "text": uname_val, "selector": username.selector.model_dump()},
-            {"type": "TypeAction", "text": passwd_val, "selector": password.selector.model_dump()},
+            {"type": "TypeAction", "text": "<username>", "selector": username.selector.model_dump()},
+            {"type": "TypeAction", "text": "<password>", "selector": password.selector.model_dump()},
             {"type": "ClickAction", "selector": submit.selector.model_dump()},
         ]
     return None
@@ -276,7 +160,7 @@ def detect_logout_target(candidates: list[Candidate]) -> list[dict] | None:
     return None
 
 
-def get_registration_actions(candidates: list[Candidate], creds: dict | None = None) -> list[dict] | None:
+def get_registration_actions(candidates: list[Candidate]) -> list[dict] | None:
     username = email = password = confirm = submit = None
     password_seen = False
 
@@ -312,24 +196,19 @@ def get_registration_actions(candidates: list[Candidate], creds: dict | None = N
     if not username and not email:
         return None
 
-    _creds = creds or {}
-    uname_val = _creds.get("signup_username", _creds.get("username", "<signup_username>"))
-    email_val = _creds.get("signup_email", _creds.get("email", "<signup_email>"))
-    passwd_val = _creds.get("signup_password", _creds.get("password", "<signup_password>"))
-
     actions: list[dict] = []
     if username:
-        actions.append({"type": "TypeAction", "text": uname_val, "selector": username.selector.model_dump()})
+        actions.append({"type": "TypeAction", "text": "<signup_username>", "selector": username.selector.model_dump()})
     if email:
-        actions.append({"type": "TypeAction", "text": email_val, "selector": email.selector.model_dump()})
-    actions.append({"type": "TypeAction", "text": passwd_val, "selector": password.selector.model_dump()})
+        actions.append({"type": "TypeAction", "text": "<signup_email>", "selector": email.selector.model_dump()})
+    actions.append({"type": "TypeAction", "text": "<signup_password>", "selector": password.selector.model_dump()})
     if confirm:
-        actions.append({"type": "TypeAction", "text": passwd_val, "selector": confirm.selector.model_dump()})
+        actions.append({"type": "TypeAction", "text": "<signup_password>", "selector": confirm.selector.model_dump()})
     actions.append({"type": "ClickAction", "selector": submit.selector.model_dump()})
     return actions
 
 
-def get_contact_actions(candidates: list[Candidate], creds: dict | None = None) -> list[dict] | None:
+def get_contact_actions(candidates: list[Candidate]) -> list[dict] | None:
     name_c = email_c = message_c = submit_c = None
 
     for c in candidates:
@@ -363,14 +242,11 @@ def get_contact_actions(candidates: list[Candidate], creds: dict | None = None) 
     if not message_c and (not name_c or not email_c):
         return None
 
-    _creds = creds or {}
-    email_val = _creds.get("email", "<signup_email>")
-
     actions: list[dict] = []
     if name_c:
         actions.append({"type": "TypeAction", "text": "Test User", "selector": name_c.selector.model_dump()})
     if email_c:
-        actions.append({"type": "TypeAction", "text": email_val, "selector": email_c.selector.model_dump()})
+        actions.append({"type": "TypeAction", "text": "<signup_email>", "selector": email_c.selector.model_dump()})
     if message_c:
         actions.append({"type": "TypeAction", "text": "Hello, this is a test message for support.", "selector": message_c.selector.model_dump()})
     actions.append({"type": "ClickAction", "selector": submit_c.selector.model_dump()})
@@ -382,8 +258,6 @@ def try_shortcut(
     candidates: list[Candidate],
     soup: BeautifulSoup,
     step_index: int,
-    creds: dict | None = None,
-    has_not_constraints: bool = False,
 ) -> list[dict] | None:
     """Attempt deterministic shortcut for the given task type."""
     if task_type is None:
@@ -392,7 +266,7 @@ def try_shortcut(
     if task_type == "login":
         if is_already_logged_in(soup):
             return [{"type": "WaitAction", "time_seconds": 1}]
-        return detect_login_fields(candidates, creds=creds)
+        return detect_login_fields(candidates)
 
     if task_type == "logout":
         result = detect_logout_target(candidates)
@@ -400,15 +274,15 @@ def try_shortcut(
             return result
         # May need to login first, then logout
         if not is_already_logged_in(soup):
-            login = detect_login_fields(candidates, creds=creds)
+            login = detect_login_fields(candidates)
             if login:
                 return login
         return None
 
     if task_type == "registration":
-        return get_registration_actions(candidates, creds=creds)
+        return get_registration_actions(candidates)
 
     if task_type == "contact":
-        return get_contact_actions(candidates, creds=creds)
+        return get_contact_actions(candidates)
 
     return None
