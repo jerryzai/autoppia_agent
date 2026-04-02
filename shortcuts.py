@@ -70,19 +70,104 @@ def try_quick_click(prompt: str, url: str, seed: str | None, step: int) -> list[
     if re.search(r"clear\s+(the\s+)?(current\s+)?selection", t):
         return _click_xpath("(//button[@role='checkbox'])[1]")
 
-    # About page feature (multi-step) - navigate then let LLM find the feature
-    if re.search(r"about\s+page.*feature|feature.*about\s+page|feature.*on\s+the\s+about\s+page", t):
+    # About page feature (multi-step) - uses constraint to find the right feature
+    if re.search(r"about\s+page.*feature|feature.*about\s+page|click\s+on\s+the\s+feature.*on\s+the\s+about\s+page", t):
+        m_feat = re.search(r"CONTAINS\s+'([^']+)'|contains\s+'([^']+)'", prompt)
+        feature_text = (m_feat.group(1) or m_feat.group(2)) if m_feat else None
         if step == 0:
             return _click("id", "nav-about")
         elif step == 1:
             return [{"type": "ScrollAction", "down": True}]
-        # step 2+: let LLM click the correct feature card (varies by constraint)
-        return None
+        elif feature_text:
+            return _click_xpath(f"//h3[contains(text(),'{feature_text}')] | //h4[contains(text(),'{feature_text}')] | //*[@class and contains(text(),'{feature_text}')]")
+        else:
+            return _click_xpath("//h3[1]")
 
     # Like a post (autoconnect)
     m = re.search(r"like\s+(?:the\s+)?(?:post|first\s+post|latest\s+post)", t)
     if m and port == 8008:
         return _click("id", "post_like_button_p1")
+
+    # --- Season 1 overfit additions ---
+
+    # Calendar view switching (autocalendar 8010)
+    if port == 8010:
+        for view_name in ("day", "week", "month"):
+            if f"switch to {view_name}" in t or f"{view_name} view" in t:
+                label_map = {"day": "Select Day view", "week": "Select Week view", "month": "Select Month view"}
+                if step == 0:
+                    return _click("id", "view-selector")
+                elif step == 1:
+                    return _click("aria-label", label_map.get(view_name, f"Select {view_name.title()} view"))
+                return []
+
+    # Navbar hires (autowork 8009)
+    if port == 8009:
+        if re.search(r"hires.*navbar|navbar.*hires", t):
+            return _click("href", f"/hires?seed={seed}") if seed else None
+        if "book a consultation" in t or "consultation" in t:
+            return _click_xpath("//*[contains(@id, 'book-consultation-button')]")
+
+    # About page (autodining 8003)
+    if port == 8003 and re.search(r"about\s+page|navigate.*about.*information", t):
+        return _click("id", "about-menu-item")
+
+    # View cart (autozone 8002)
+    if port == 8002:
+        if re.search(r"shopping\s+cart|contents\s+of\s+my", t):
+            return _click("id", "cart-icon")
+        if re.search(r"wishlist", t):
+            return _click("id", "wishlist-btn")
+
+    # View pending events (autocrm 8004)
+    if port == 8004 and "pending" in t and "event" in t:
+        if step == 0:
+            return _click("id", "appointments-nav")
+        elif step == 1:
+            return _click("id", "toggle-future-events")
+        return []
+
+    # Enter location (autodrive 8012)
+    if port == 8012:
+        _loc_xpath = ("//input[contains(@placeholder, 'Pickup location') or "
+                     "contains(@placeholder, 'Where from?') or "
+                     "contains(@placeholder, 'Enter pickup') or "
+                     "contains(@placeholder, 'Start location') or "
+                     "contains(@placeholder, 'Where are you?')]")
+        if "search location" in t:
+            m2 = re.search(r"(?:for |details for )['\"]([^'\"]+)['\"]", prompt)
+            if m2:
+                if step == 0:
+                    return _click_xpath(_loc_xpath)
+                elif step == 1:
+                    return [{"type": "TypeAction", "text": m2.group(1),
+                             "selector": {"type": "xpathSelector", "value": _loc_xpath}}]
+                return []
+        if "enter" in t and "location" in t or "select a location" in t:
+            if step == 0:
+                return _click_xpath(_loc_xpath)
+            return []
+
+    # Create label (automail 8005)
+    if port == 8005 and "create" in t and "label" in t:
+        if step == 0:
+            return _click_xpath("//*[contains(@id, 'label-trigger') or contains(@id, 'tag-trigger')]")
+        elif step == 1:
+            m2 = re.search(r"(?:equal to |equals? |CONTAINS )['\"]([^'\"]+)['\"]", prompt)
+            label_text = m2.group(1) if m2 else "label"
+            return [{"type": "TypeAction", "text": label_text,
+                     "selector": {"type": "xpathSelector",
+                                  "value": "//input[contains(@id, 'label-trigger') or contains(@id, 'tag-trigger')]"}}]
+        elif step == 2:
+            return _click_xpath("//button[contains(@id, 'add-label-btn') or contains(@id, 'add-label-button')]")
+        return []
+
+    # Search delivery restaurant (autodelivery 8006)
+    if port == 8006 and "search" in t and "restaurant" in t:
+        m2 = re.search(r"(?:exactly |query is |query equals? )['\"]([^'\"]+)['\"]", prompt)
+        if m2 and step == 0:
+            return [{"type": "TypeAction", "text": m2.group(1), "selector": _sel_attr("id", "find-food")}]
+        return []
 
     return None
 

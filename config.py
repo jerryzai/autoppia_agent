@@ -89,13 +89,11 @@ WEBSITE_HINTS: dict[str, str] = {
         "Contact form: name, email, message, subject fields."
     ),
     "autocrm": (
-        "SITE: Legal case management + calendar. NAV: Dashboard, Matters, Clients, Calendar, Logs/Billing, Settings. "
-        "Matters list: sortable columns (name, client, status, created_at). Add New Matter button. Click matter to open/edit. "
-        "Update matter: open matter -> Edit button -> update fields -> Save. "
+        "SITE: Legal case management + calendar. NAV: Dashboard, Matters, Clients, Calendar. "
+        "Matters list: sortable columns. Add New Matter button. "
         "Clients list: Add New Client button (name, email, status, matters). "
-        "Calendar: Add event button, date/time/label/event_type fields. Click event to cancel/edit. "
-        "Logs/Billing: list of log entries with status (Billable/Non-billable), client, hours. Edit log button. "
-        "Settings/Account: display name field, save button. "
+        "Calendar: Add event button, date/time/label/event_type fields. "
+        "Settings: Change user name option. "
         "Sort by column: click column header or sort button."
     ),
     "automail": (
@@ -131,28 +129,26 @@ WEBSITE_HINTS: dict[str, str] = {
         "Review form: rating stars + text area."
     ),
     "autoconnect": (
-        "SITE: Professional network (LinkedIn-style). NAV: Feed, Jobs, People, Company Pages, Profile. "
-        "Feed: posts with text, author, Like/Comment/Save buttons. Post status: text box in feed. "
-        "Jobs: job listings (title, company, location). Apply button. Back to Jobs breadcrumb/link. "
-        "My Applications: list with status, Withdraw/Cancel button. "
-        "Company Pages: Follow/Unfollow button. "
-        "People: search bar for users. "
-        "Profile page: Edit Profile button -> edit bio, skills, photo. "
-        "EXPERIENCE section on profile: Add Experience button (+), each entry has Edit/Delete. "
-        "Edit experience: company, title, location, duration fields. "
-        "Navbar profile option: click profile icon/link in top nav to see profile."
+        "SITE: Professional network (LinkedIn-style). NAV: Feed, Jobs, People, Company Pages. "
+        "Feed: posts with text, author, Like/Comment buttons. Comment: text field + submit. "
+        "Jobs section: job listings with title, company, location, Apply button. "
+        "My Applications: list with status (Pending/Accepted/Rejected), Withdraw/Cancel button. "
+        "Company Pages: Follow/Unfollow button on each page. "
+        "People/Users: search bar for users. "
+        "Profile: Edit profile (bio, skills, photo). "
+        "Back to Jobs: breadcrumb or Back button from job detail."
     ),
     "autowork": (
         "SITE: Freelancer hiring platform. NAV: Jobs, Hires, Experts/Browse. "
-        "Expert/Consultant cards: name, role, country, rating, price. Favorite/heart button per card. "
+        "Expert/Consultant cards: name, role, country, rating, price. "
         "Expert actions: Hire Now button, Hire Later button, View Profile. "
-        "Favorite expert: click heart/star/favorite icon on expert card. "
         "Hire Later page: list of saved experts with Remove button. "
         "Job Posting: Post a Job / + button -> form with title, description, rate_from, rate_to, project size. "
         "Job posting form: title field, description, rate range, project size (Small/Medium/Large). "
         "Close job posting window: X/Cancel button on job posting modal. "
-        "Search jobs: jobs section has search input; search experts: skills search bar. "
-        "NAV: Jobs link, Hires link in navbar. Hiring Team: section showing team members."
+        "Search skills: search bar for skills. "
+        "NAV: Jobs link, Hires link in navbar. "
+        "Hiring Team: section showing team members."
     ),
     "autocalendar": (
         "SITE: Calendar app (Google Calendar-style). "
@@ -199,25 +195,26 @@ WEBSITE_HINTS: dict[str, str] = {
         "Contact doctor form: opens when Contact button clicked on doctor card."
     ),
     "autostats": (
-        "SITE: Bittensor blockchain explorer/analytics dashboard. "
-        "TABS/NAV: Subnets, Validators, Blocks/Epochs, Wallet. "
-        "SUBNETS: table with subnet_name, netuid, emission, etc. Favorite/star button per row. "
-        "Click subnet row for details. Filter/search at top. NOT constraint = pick a row NOT matching excluded value. "
-        "VALIDATORS: table with rank, hotkey, totalWeight, stake columns. Click row for details. "
-        "BLOCKS: table with epoch, blockNumber, extrinsicsCount. Click row for details. "
-        "WALLET: 'Connect Wallet' button (top-right corner). Click -> modal with wallet list "
-        "(SubWallet, Talisman, PolkadotJS, Enkrypt, etc.). Click wallet name to connect. "
-        "For NOT constraint on wallet: pick a wallet whose name is NOT the excluded value."
+        "SITE: Blockchain/DeFi analytics dashboard (Bittensor-style). "
+        "NAV: Subnets, Validators, Blocks, Wallet tabs. "
+        "Subnets table: subnet_name, volume24h, price, change columns. Each row has a star/favorite button. "
+        "Click subnet row → subnet detail page with stats. "
+        "Validators table: rank, totalWeight, hotkey, stake columns. Click row → validator detail. "
+        "Blocks table: number, hash, extrinsicsCount, timestamp. Click row → block detail. "
+        "Connect Wallet button (top-right): opens modal with wallet options (Talisman, SubWallet, PolkadotJS). "
+        "Click wallet name to connect. Disconnect: click connected wallet button. "
+        "Favorite: click star icon on subnet row."
     ),
     "autodiscord": (
-        "SITE: Discord-like chat app. "
-        "LEFT SIDEBAR: server icons list (click server icon to select server). "
-        "CHANNELS: text channels (#name) and voice channels listed per server. Click channel name to select/view. "
-        "DIRECT MESSAGES: DM/@ icon in left sidebar or top of channel list. Click to open DMs list. "
-        "MESSAGE INPUT: text box at the very bottom of the chat panel. Click it and type to send message, press Enter. "
-        "VOICE CHANNEL: click to join. Mute/unmute = microphone button in bottom-left control bar. "
-        "To send a message: 1) select server, 2) select channel, 3) type in bottom input, 4) Enter. "
-        "Channel list shows names like 'general', 'random', etc. Server list on far left."
+        "SITE: Discord-style chat app. "
+        "Left panel: server list (icons), then channel list (text channels + voice channels). "
+        "Text channels: click to select and view messages. "
+        "Voice channels: click to join. Mute button in bottom-left bar. "
+        "DM section: top of channel list or separate tab for Direct Messages. "
+        "Main panel: message input at bottom. Type message + press Enter/click Send. "
+        "Settings: gear icon bottom-left → User Settings → Account (display name, etc.). "
+        "Server selection: click server icon in leftmost column. "
+        "DM: click DM icon or user avatar → open DM conversation."
     ),
 }
 
@@ -253,8 +250,8 @@ TASK_PLAYBOOKS: dict[str, str] = {
     "ADD_COMMENT": "PLAYBOOK: 1) Navigate to the specific item detail page. 2) Find the comment/review form. 3) Type the comment EXACTLY as specified. 4) Submit.",
     "LIST_ACTION": "PLAYBOOK: 1) Navigate to the item detail page. 2) Find the watchlist/reading-list button. 3) Click add or remove.",
     "SEARCH_LOCATION": "PLAYBOOK: 1) Find the search/destination input field. 2) Click it to focus. 3) Type the destination EXACTLY as given. 4) Click the matching result. 5) Submit/confirm if needed.",
-    "RESERVE_RIDE": "PLAYBOOK: 1) Browse available rides. 2) Use list_cards to see all rides. 3) Find the ride matching ALL TASK_CONSTRAINTS. 4) Click Reserve on the matching ride.",
-    "CANCEL_RESERVATION": "PLAYBOOK: 1) Navigate to reservations/upcoming rides page. 2) Find the reservation matching ALL TASK_CONSTRAINTS. 3) Click Cancel. 4) Confirm if prompted.",
+    "RESERVE_RIDE": "PLAYBOOK: 1) On autodrive, the main page shows a location input and destination input. First check if rides are visible. 2) Use list_cards to find rides. 3) Find the ride matching ALL TASK_CONSTRAINTS (location CONTAINS, destination NOT, ride_name CONTAINS, time AFTER/BEFORE). 4) Click Reserve button on the matching ride.",
+    "CANCEL_RESERVATION": "PLAYBOOK: 1) Find the Reservations or My Trips link (may be in navbar). 2) Navigate to reservations/upcoming rides page. 3) Use list_cards or search_text to find the reservation matching ALL TASK_CONSTRAINTS (location, destination, ride_name, scheduled_time). 4) Click Cancel on that reservation. 5) Confirm if prompted.",
     "SELECT_DATE": "PLAYBOOK: 1) Find the date picker/calendar widget. 2) Click it to open. 3) Select a date satisfying TASK_CONSTRAINTS. 4) Confirm the selection.",
     "SELECT_TIME": "PLAYBOOK: 1) Find the time picker/dropdown. 2) Click to open. 3) Select a time satisfying the constraint. 4) Confirm.",
     "NEXT_PICKUP": "PLAYBOOK: 1) Look for a Next Pickup or scheduled ride section. 2) Find the pickup satisfying date/time constraints. 3) Click to view details.",
@@ -381,7 +378,7 @@ TASK_PLAYBOOKS: dict[str, str] = {
     "AUTOLIST_SELECT_TASK_PRIORITY": "PLAYBOOK: 1) Find task with priority NOT the excluded value. 2) Click priority selector. 3) Select High or target value. 4) Save.",
     "AUTOLIST_CANCEL_TASK_CREATION": "PLAYBOOK: 1) Click Add Task. 2) Fill fields as specified. 3) Click Cancel/Discard instead of Submit.",
     "AUTOLIST_TEAM_CREATED": "PLAYBOOK: 1) Navigate to Teams section. 2) Click Create Team. 3) Fill fields satisfying constraints. 4) Save.",
-    "AUTOLIST_COMPLETE_TASK": "PLAYBOOK: 1) Find task matching ALL constraints. 2) Click Complete/checkmark button. 3) Confirm.",
+    "AUTOLIST_COMPLETE_TASK": "PLAYBOOK: 1) Browse task list. 2) Find task matching ALL TASK_CONSTRAINTS (name contains/equals, description, date, priority). 3) Click the Complete checkbox or checkmark button on that task. 4) Confirm if prompted.",
     "AUTOLIST_SELECT_DATE_FOR_TASK": "PLAYBOOK: 1) Find task. 2) Click Edit or date field. 3) Select date satisfying constraint. 4) Confirm.",
     "DELETE_BOOK": "PLAYBOOK: 1) Login with credentials. 2) Navigate to your books. 3) Find matching book. 4) Click Delete. 5) Confirm.",
     "EDIT_BOOK": "PLAYBOOK: 1) Login. 2) Find book matching constraints. 3) Click Edit. 4) Modify fields. 5) Save.",
@@ -457,35 +454,40 @@ TASK_PLAYBOOKS: dict[str, str] = {
     "EDIT_TASK": "PLAYBOOK: 1) Find task matching constraints. 2) Click Edit. 3) Update fields. 4) Save.",
     "COMPLETE_TASK": "PLAYBOOK: 1) Find task matching constraints. 2) Click Complete/Done/Checkmark.",
     "JOB_POSTING": "PLAYBOOK: 1) Find Post a Job button. 2) Click it. 3) Type EXACT job title. 4) Submit.",
-    # AutoDiscord (8015)
-    "SEND_MESSAGE": "PLAYBOOK: 1) Select server from server list if needed. 2) Find channel matching constraints - click its name. 3) Click message input at bottom of screen. 4) Type message satisfying constraints. 5) Press Enter to send.",
-    "SELECT_CHANNEL": "PLAYBOOK: 1) Find channel list in left sidebar. 2) Find channel whose name satisfies constraints. 3) Click on channel name to select it.",
-    "SELECT_SERVER": "PLAYBOOK: 1) Find server list on far left sidebar (server icons). 2) Find server matching constraints (name NOT the excluded / contains the value). 3) Click on that server icon.",
-    "VIEW_DMS": "PLAYBOOK: 1) Find Direct Messages icon or '@' button in left sidebar. 2) Click it to open DMs list.",
-    "JOIN_VOICE_CHANNEL": "PLAYBOOK: 1) Find the voice channels section. 2) Find voice channel matching constraints. 3) Click on it to join.",
-    "TOGGLE_MUTE": "PLAYBOOK: 1) If not in a voice channel, join one first. 2) Find the microphone/mute toggle button (bottom-left control bar). 3) Click to toggle mute to the desired state.",
-    # Bittensor/AutoStats (8014)
-    "FAVORITE_SUBNET": "PLAYBOOK: 1) Navigate to Subnets tab/section. 2) Find the subnet satisfying constraints (name NOT excluded / contains value / etc). 3) Click the star/heart/favorite button on that subnet row.",
-    "VIEW_VALIDATOR": "PLAYBOOK: 1) Navigate to Validators tab. 2) Scroll through or filter validators. 3) Find validator matching ALL constraints (rank NOT x, totalWeight >= y). 4) Click to view details.",
-    "VIEW_BLOCK": "PLAYBOOK: 1) Navigate to Blocks/Epochs tab. 2) Find block matching ALL constraints (epoch >= x, extrinsicsCount < y). 3) Click to view block details.",
-    "CONNECT_WALLET": "PLAYBOOK: 1) Find 'Connect Wallet' button (top-right area). 2) Click it to open wallet selection modal. 3) Find wallet whose name satisfies constraints (NOT excluded / equals specified). 4) Click that wallet to connect.",
-    # AutoConnect (8008) experience
-    "ADD_EXPERIENCE": "PLAYBOOK: 1) Navigate to Profile page. 2) Find the Experience section. 3) Click Add Experience (+) button. 4) Fill company, title, duration fields EXACTLY as given. 5) Click Save.",
-    "EDIT_EXPERIENCE": "PLAYBOOK: 1) Navigate to Profile page. 2) Find Experience section. 3) Find experience entry matching constraints (location CONTAINS value). 4) Click Edit on that entry. 5) Update specified fields. 6) Save.",
-    "VIEW_PROFILE": "PLAYBOOK: 1) Find Profile link or icon in the navbar. 2) Click it to view profile details.",
-    # AutoMail (8005) missing
-    "REPLY_EMAIL": "PLAYBOOK: 1) Browse inbox email list. 2) Find email matching ALL constraints (to field CONTAINS value, subject, etc). 3) Click to open the email. 4) Click the Reply button. 5) Type reply content if needed. 6) Click Send.",
-    "SAVE_EMAIL_DRAFT": "PLAYBOOK: 1) Click Compose/New Email button. 2) Fill recipient satisfying constraints. 3) Fill subject/body if needed. 4) Click Save as Draft instead of Send.",
-    # AutoCRM (8004) missing
-    "UPDATE_MATTER": "PLAYBOOK: 1) Navigate to Matters section. 2) Find matter matching ALL constraints (name equals, client contains, etc). 3) Click on it to open. 4) Click Edit. 5) Update specified fields. 6) Click Save.",
-    "SETTINGS_ACCOUNT": "PLAYBOOK: 1) Navigate to Settings or Account Settings. 2) Find the display name / user name field. 3) Enter a name satisfying constraints (NOT the excluded value). 4) Click Save.",
-    # AutoWork (8009) missing
-    "FAVORITE_EXPERT": "PLAYBOOK: 1) Browse expert/consultant list. 2) Find expert matching constraints (name CONTAINS value). 3) Click the heart/star/favorite icon on that expert card.",
-    "SEARCH_JOBS": "PLAYBOOK: 1) Navigate to Jobs section. 2) Find the search input. 3) Type the EXACT query from TASK_CONSTRAINTS. 4) Submit search (Enter or click search button).",
-    # AutoZone/delivery
-    "EMPTY_CART": "PLAYBOOK: 1) Navigate to Cart. 2) Find item matching constraints (title CONTAINS value, price >= x). 3) Remove items or click Empty Cart / Clear All button.",
-    # Generic
     "GENERAL": "PLAYBOOK: Analyze the task carefully, identify the key action required, and execute the most direct path. Use TASK_CONSTRAINTS to find the correct item and fill forms.",
+    "VIEW_SUBNET": "PLAYBOOK: 1) Navigate to Subnets tab/section. 2) Find subnet row matching ALL TASK_CONSTRAINTS. 3) Click on that subnet row to view details.",
+    "VIEW_VALIDATOR": "PLAYBOOK: 1) Navigate to Validators tab/section. 2) Find validator row matching ALL TASK_CONSTRAINTS. 3) Click on that validator row to view details.",
+    "VIEW_BLOCK": "PLAYBOOK: 1) Navigate to Blocks tab/section. 2) Find block row matching ALL TASK_CONSTRAINTS. 3) Click on that block row to view details.",
+    "FAVORITE_SUBNET": "PLAYBOOK: 1) Navigate to Subnets tab. 2) Find subnet row matching constraints (NOT the excluded subnet_name). 3) Click the star/favorite icon on that row.",
+    "CONNECT_WALLET": "PLAYBOOK: 1) Find the Connect Wallet button (top-right area). 2) Click it to open wallet modal. 3) Find wallet option matching constraints (NOT the excluded wallet_name). 4) Click that wallet to connect.",
+    "DISCONNECT_WALLET": "PLAYBOOK: 1) Find the connected wallet button (shows wallet name). 2) Click it. 3) Click Disconnect.",
+    "ADD_EXPERIENCE": "PLAYBOOK: 1) Navigate to Profile page. 2) Find Experience section. 3) Click Add Experience button. 4) Fill fields: company, duration, title, location satisfying ALL TASK_CONSTRAINTS. 5) Save.",
+    "EDIT_EXPERIENCE": "PLAYBOOK: 1) Navigate to Profile. 2) Find Experience section. 3) Find experience matching constraints. 4) Click Edit. 5) Update fields. 6) Save.",
+    "SELECT_CHANNEL": "PLAYBOOK: 1) Look at the channel list in the left panel. 2) Find a text channel matching constraints. 3) Click on it to select.",
+    "SEND_MESSAGE": "PLAYBOOK: 1) Select the channel (click on channel in left panel if needed). 2) Find the message input box at bottom of main panel. 3) Click it. 4) Type the message text. 5) Press Enter or click Send.",
+    "JOIN_VOICE_CHANNEL": "PLAYBOOK: 1) In channel list, find a Voice Channel section. 2) Click on the voice channel to join it.",
+    "VOICE_MUTE_TOGGLE": "PLAYBOOK: 1) Join a voice channel if not already in one. 2) Find the mute/unmute button in the voice bar (bottom-left). 3) Click it to toggle mute state satisfying the constraint.",
+    "SELECT_SERVER": "PLAYBOOK: 1) Find the server icon list on the far left. 2) Click on a server icon to select it.",
+    "SELECT_DM": "PLAYBOOK: 1) Find the DM section (inbox/home icon). 2) Click to open DMs. 3) Find DM conversation matching constraints (name). 4) Click to open it.",
+    "VIEW_DMS": "PLAYBOOK: 1) Find the Direct Messages icon or link (usually home/inbox at top of sidebar). 2) Click it to open DMs list.",
+    "SETTINGS_ACCOUNT": "PLAYBOOK: 1) Find the Settings gear icon (bottom-left). 2) Click it. 3) Navigate to Account section. 4) Find the field matching constraints (e.g., display name). 5) Update it satisfying constraints. 6) Save.",
+    "OPEN_SETTINGS": "PLAYBOOK: 1) Find the Settings gear/cog icon (bottom-left or header). 2) Click it to open Settings page.",
+    "APPOINTMENT_BOOKED_SUCCESSFULLY": "PLAYBOOK: 1) Navigate to Appointments section. 2) Find the appointment matching ALL TASK_CONSTRAINTS (doctor_name, time, speciality). 3) Click to view appointment details.",
+    "PLACE_ORDER": "PLAYBOOK: 1) Find the restaurant matching constraints (contains field). 2) Click to open restaurant. 3) Find the menu item matching constraints (preferences, price, quantity). 4) Add to cart. 5) Navigate to checkout. 6) Fill phone, address, mode fields EXACTLY per constraints. 7) Submit order.",
+    "REPLY_EMAIL": "PLAYBOOK: 1) Browse the email list. 2) Find the email matching ALL constraints (to, body). 3) Click to open it. 4) Click Reply button. 5) Type reply text. 6) Send.",
+    "UPDATE_MATTER": "PLAYBOOK: 1) Navigate to Matters section. 2) Find the matter matching ALL TASK_CONSTRAINTS (name, client, status). 3) Click Edit on that matter. 4) Update fields per constraints. 5) Save.",
+    "EMPTY_CART": "PLAYBOOK: 1) Navigate to cart/shopping cart page. 2) Find items satisfying constraints. 3) Remove items by clicking Remove/Delete on each, or use Clear Cart button if available.",
+    "BACK_TO_ALL_HOTELS": "PLAYBOOK: 1) Open a hotel listing matching constraints. 2) Find the Back/Back to Hotels navigation link. 3) Click it.",
+    "PEOPLE_SELECTED": "PLAYBOOK: 1) Find the guest/people selector or dropdown on the search/booking form. 2) Click to open it. 3) Select the number of people satisfying the constraint (equals value). 4) Confirm.",
+    "LOGOUT": "PLAYBOOK: 1) Find the profile/account menu (top-right avatar or navbar). 2) Click it to open dropdown. 3) Find Logout/Sign Out option. 4) Click it.",
+    "DELETE_FILM": "PLAYBOOK: 1) Navigate to login page. 2) Type username/password EXACTLY. 3) Submit login. 4) Navigate to your film/movie in admin section. 5) Click Delete. 6) Confirm deletion.",
+    "EDIT_FILM": "PLAYBOOK: 1) Login with exact credentials. 2) Navigate to your film in admin. 3) Click Edit. 4) Update specified fields (year, rating, etc.) EXACTLY as given. Leave others unchanged. 5) Save.",
+    "ADD_FILM": "PLAYBOOK: 1) Login with exact credentials. 2) Find Add Film button in admin/nav. 3) Fill ALL form fields with EXACT values from constraints. 4) Submit.",
+    "FAVORITE_EXPERT_SELECTED": "PLAYBOOK: 1) Browse expert/consultant list. 2) Find expert matching ALL constraints (name NOT contains, country NOT contains, role NOT contains). 3) Click the favorite/heart/star icon on that expert.",
+    "FAVORITE_EXPERT_REMOVED": "PLAYBOOK: 1) Find the favorites/saved experts section. 2) Find expert matching constraints. 3) Click the unfavorite/remove icon.",
+    "REGISTRATION": "PLAYBOOK: 1) If not on register page, click Register/Sign Up link in navigation. 2) Fill username with EXACT value from constraints (use <signup_username>). 3) Fill email with EXACT value (use <signup_email>). 4) Fill password (use <signup_password>). 5) Click submit/register button.",
+    "BOOK_RESTAURANT": "PLAYBOOK: 1) Browse restaurant list. 2) Find restaurant matching ALL constraints (cuisine NOT, rating <=, name NOT CONTAIN). 3) Click on restaurant. 4) Set date, time, and number of people from constraints. 5) Click Book/Reserve.",
+    "REMOVE_FROM_WISHLIST": "PLAYBOOK: 1) Find the Wishlist/Saved icon in the header or navigate to /wishlist. 2) Browse saved listings. 3) Find listing matching ALL constraints. 4) Click Remove/heart icon to remove it.",
 }
 
 # ---------------------------------------------------------------------------
