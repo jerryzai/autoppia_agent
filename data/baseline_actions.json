@@ -166,6 +166,17 @@
         {
           "type": "ClickAction",
           "selector": {
+            "type": "attributeValueSelector",
+            "attribute": "name",
+            "value": "next-month",
+            "case_sensitive": false
+          },
+          "x": null,
+          "y": null
+        },
+        {
+          "type": "ClickAction",
+          "selector": {
             "type": "xpathSelector",
             "attribute": null,
             "value": "//button[text()='3' and not(@disabled)]",
@@ -376,7 +387,7 @@
       ]
     },
     "status": "success",
-    "elapsed": 3.8
+    "elapsed": 2.26
   },
   {
     "task": {
@@ -565,73 +576,54 @@
       "actions": [
         {
           "type": "NavigateAction",
-          "attributes": {
-            "url": "http://localhost:8000/?seed=853&X-WebAgent-Id=168&web_agent_id=168&X-Validator-Id=custom_validator&validator_id=custom_validator",
-            "go_back": false,
-            "go_forward": false
-          },
-          "url": "http://localhost:8000/?seed=853&X-WebAgent-Id=168&web_agent_id=168&X-Validator-Id=custom_validator&validator_id=custom_validator",
+          "selector": null,
+          "url": "http://localhost:8000/?seed=853",
           "go_back": false,
           "go_forward": false
         },
         {
           "type": "ClickAction",
-          "attributes": {
-            "selector": {
-              "type": "xpathSelector",
-              "value": "//a[contains(@href, '/search')]",
-              "case_sensitive": false
-            }
-          },
           "selector": {
             "type": "xpathSelector",
+            "attribute": null,
             "value": "//a[contains(@href, '/search')]",
             "case_sensitive": false
-          }
+          },
+          "x": null,
+          "y": null
         },
         {
           "type": "SelectDropDownOptionAction",
-          "attributes": {
-            "text": "Action",
-            "selector": {
-              "type": "xpathSelector",
-              "value": "//select[.//option[normalize-space(.)=\"All genres\"]]",
-              "case_sensitive": false
-            },
-            "timeout_ms": 1000
-          },
-          "text": "Action",
           "selector": {
             "type": "xpathSelector",
+            "attribute": null,
             "value": "//select[.//option[normalize-space(.)=\"All genres\"]]",
             "case_sensitive": false
           },
+          "text": "Action",
           "timeout_ms": 1000
         },
         {
           "type": "SelectDropDownOptionAction",
-          "attributes": {
-            "text": "1988",
-            "selector": {
-              "type": "xpathSelector",
-              "value": "//select[.//option[normalize-space(.)=\"All years\"]]",
-              "case_sensitive": false
-            },
-            "timeout_ms": 1000
-          },
-          "text": "1988",
           "selector": {
             "type": "xpathSelector",
+            "attribute": null,
             "value": "//select[.//option[normalize-space(.)=\"All years\"]]",
             "case_sensitive": false
           },
+          "text": "1988",
           "timeout_ms": 1000
+        },
+        {
+          "type": "WaitAction",
+          "selector": null,
+          "time_seconds": 2.0,
+          "timeout_seconds": 5.0
         }
       ]
     },
     "status": "success",
-    "error": "",
-    "elapsed": 0.0
+    "elapsed": 1.3
   },
   {
     "task": {
@@ -1420,6 +1412,17 @@
         {
           "type": "ClickAction",
           "selector": {
+            "type": "attributeValueSelector",
+            "attribute": "name",
+            "value": "next-month",
+            "case_sensitive": false
+          },
+          "x": null,
+          "y": null
+        },
+        {
+          "type": "ClickAction",
+          "selector": {
             "type": "xpathSelector",
             "attribute": null,
             "value": "//button[text()='6' and not(@disabled)]",
@@ -1590,7 +1593,7 @@
       ]
     },
     "status": "success",
-    "elapsed": 2.05
+    "elapsed": 2.48
   },
   {
     "task": {
@@ -2179,7 +2182,7 @@
           "selector": {
             "type": "xpathSelector",
             "attribute": null,
-            "value": "//button[contains(text(), 'Eliminar Película')]",
+            "value": "//button[contains(text(), 'Eliminar Pel\u00c3\u00adcula')]",
             "case_sensitive": false
           }
         },
@@ -2225,10 +2228,77 @@
       "useCase": "REGISTRATION",
       "prompt": "Please register a new account where the username equals 'newuser<web_agent_id>', the email equals 'newuser<web_agent_id>@gmail.com', and the password equals 'Passw0rd!'."
     },
-    "response": null,
-    "status": "error",
-    "error": "",
-    "elapsed": 0.0
+    "response": {
+      "actions": [
+        {
+          "type": "NavigateAction",
+          "selector": null,
+          "url": "http://localhost:8000?seed=342",
+          "go_back": false,
+          "go_forward": false
+        },
+        {
+          "type": "ClickAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//a[contains(@href, '/register')]",
+            "case_sensitive": false
+          },
+          "x": null,
+          "y": null
+        },
+        {
+          "type": "TypeAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//input[contains(@placeholder, 'Create username')]",
+            "case_sensitive": false
+          },
+          "text": "newuser<web_agent_id>"
+        },
+        {
+          "type": "TypeAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//input[contains(@placeholder, 'Create a password')]",
+            "case_sensitive": false
+          },
+          "text": "password123"
+        },
+        {
+          "type": "TypeAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//input[contains(@placeholder, 'Verify password')]",
+            "case_sensitive": false
+          },
+          "text": "password123"
+        },
+        {
+          "type": "ClickAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//button[contains(text(), 'Create')]",
+            "case_sensitive": false
+          },
+          "x": null,
+          "y": null
+        },
+        {
+          "type": "WaitAction",
+          "selector": null,
+          "time_seconds": 2.0,
+          "timeout_seconds": 5.0
+        }
+      ]
+    },
+    "status": "success",
+    "elapsed": 2.05
   },
   {
     "task": {
@@ -2277,7 +2347,7 @@
             "value": "//input[contains(@placeholder, 'Search library')]",
             "case_sensitive": false
           },
-          "text": "Les Misérables"
+          "text": "Les Mis\u00c3\u00a9rables"
         },
         {
           "type": "SendKeysIWAAction",
@@ -2980,10 +3050,62 @@
       "useCase": "UPDATE_MATTER",
       "prompt": "Update the matter with client NOT equals 'Rachel Walker'."
     },
-    "response": null,
-    "status": "error",
-    "error": "",
-    "elapsed": 0.0
+    "response": {
+      "actions": [
+        {
+          "type": "NavigateAction",
+          "selector": null,
+          "url": "http://localhost:8004/?seed=541",
+          "go_back": false,
+          "go_forward": false
+        },
+        {
+          "type": "ClickAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//a[contains(@href, '/matters')]",
+            "case_sensitive": false
+          },
+          "x": null,
+          "y": null
+        },
+        {
+          "type": "ClickAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//a[contains(@href,'/matters/MAT-057')]//button[contains(@aria-label, 'Revise Matter')]",
+            "case_sensitive": false
+          },
+          "x": null,
+          "y": null
+        },
+        {
+          "type": "TypeAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//label[text()='Client Name']/following-sibling::input",
+            "case_sensitive": false
+          },
+          "text": "xvpvn"
+        },
+        {
+          "type": "ClickAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//button[contains(@id, 'save-project-btn')]",
+            "case_sensitive": false
+          },
+          "x": null,
+          "y": null
+        }
+      ]
+    },
+    "status": "success",
+    "elapsed": 0.93
   },
   {
     "task": {
@@ -3112,7 +3234,7 @@
           "selector": {
             "type": "xpathSelector",
             "attribute": null,
-            "value": "//button[contains(text(), 'Añadir a lista')]",
+            "value": "//button[contains(text(), 'A\u00c3\u00b1adir a lista')]",
             "case_sensitive": false
           },
           "x": null,
@@ -4146,7 +4268,7 @@
       "taskId": "aefe56ec-f95f-463e-a7a5-f9eaf00cb171",
       "website": "http://localhost:8008/?seed=940",
       "useCase": "POST_STATUS",
-      "prompt": "Post a status update where the content is NOT 'Attending React Summit next month—who else is going?'"
+      "prompt": "Post a status update where the content is NOT 'Attending React Summit next month\u00e2\u20ac\u201dwho else is going?'"
     },
     "response": null,
     "status": "error",
@@ -4160,10 +4282,194 @@
       "useCase": "EDIT_USER_BOOK",
       "prompt": "Login for the following username:<username> and password:<password>. Modify your profile to change your last_name to 'car', update your bio to 'Avid reader with a love for classic literature', and ensure your website contains 'dream'."
     },
-    "response": null,
-    "status": "error",
-    "error": "",
-    "elapsed": 0.0
+    "response": {
+      "actions": [
+        {
+          "type": "NavigateAction",
+          "selector": null,
+          "url": "http://localhost:8001?seed=266",
+          "go_back": false,
+          "go_forward": false
+        },
+        {
+          "type": "ClickAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//a[contains(@href, '/signup')]",
+            "case_sensitive": false
+          },
+          "x": null,
+          "y": null
+        },
+        {
+          "type": "TypeAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//input[contains(@placeholder, 'Choose a username')]",
+            "case_sensitive": false
+          },
+          "text": "newuser<web_agent_id>"
+        },
+        {
+          "type": "TypeAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//input[contains(@placeholder, 'Set a password')]",
+            "case_sensitive": false
+          },
+          "text": "password123"
+        },
+        {
+          "type": "TypeAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//input[contains(@placeholder, 'Re-enter password')]",
+            "case_sensitive": false
+          },
+          "text": "password123"
+        },
+        {
+          "type": "ClickAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//button[contains(text(), 'Sign up')]",
+            "case_sensitive": false
+          },
+          "x": null,
+          "y": null
+        },
+        {
+          "type": "WaitAction",
+          "selector": null,
+          "time_seconds": 2.0,
+          "timeout_seconds": 5.0
+        },
+        {
+          "type": "ClickAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//button[contains(text(), 'Logout')]",
+            "case_sensitive": false
+          },
+          "x": null,
+          "y": null
+        },
+        {
+          "type": "ClickAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//a[contains(@href, '/login')]",
+            "case_sensitive": false
+          },
+          "x": null,
+          "y": null
+        },
+        {
+          "type": "TypeAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//input[contains(@placeholder, 'Enter your username')]",
+            "case_sensitive": false
+          },
+          "text": "newuser<web_agent_id>"
+        },
+        {
+          "type": "TypeAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//input[contains(@placeholder, 'Type your password')]",
+            "case_sensitive": false
+          },
+          "text": "password123"
+        },
+        {
+          "type": "ClickAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//button[contains(text(), 'Login')]",
+            "case_sensitive": false
+          },
+          "x": null,
+          "y": null
+        },
+        {
+          "type": "WaitAction",
+          "selector": null,
+          "time_seconds": 3.0,
+          "timeout_seconds": 5.0
+        },
+        {
+          "type": "ClickAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//a[contains(@href, '/profile')]",
+            "case_sensitive": false
+          },
+          "x": null,
+          "y": null
+        },
+        {
+          "type": "TypeAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//input[contains(@placeholder, 'Last name here')]",
+            "case_sensitive": false
+          },
+          "text": "car"
+        },
+        {
+          "type": "TypeAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//textarea[contains(@placeholder, 'Tell us about you')]",
+            "case_sensitive": false
+          },
+          "text": "Avid reader with a love for classic literature"
+        },
+        {
+          "type": "TypeAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//input[contains(@placeholder, 'Enter your website')]",
+            "case_sensitive": false
+          },
+          "text": "https://dream.com"
+        },
+        {
+          "type": "ClickAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//button[contains(text(), 'Update Changes')]",
+            "case_sensitive": false
+          },
+          "x": null,
+          "y": null
+        },
+        {
+          "type": "WaitAction",
+          "selector": null,
+          "time_seconds": 2.0,
+          "timeout_seconds": 5.0
+        }
+      ]
+    },
+    "status": "success",
+    "elapsed": 1.83
   },
   {
     "task": {
@@ -5212,6 +5518,17 @@
         {
           "type": "ClickAction",
           "selector": {
+            "type": "attributeValueSelector",
+            "attribute": "name",
+            "value": "next-month",
+            "case_sensitive": false
+          },
+          "x": null,
+          "y": null
+        },
+        {
+          "type": "ClickAction",
+          "selector": {
             "type": "xpathSelector",
             "attribute": null,
             "value": "//button[text()='7' and not(@disabled)]",
@@ -5551,6 +5868,17 @@
         {
           "type": "ClickAction",
           "selector": {
+            "type": "attributeValueSelector",
+            "attribute": "name",
+            "value": "next-month",
+            "case_sensitive": false
+          },
+          "x": null,
+          "y": null
+        },
+        {
+          "type": "ClickAction",
+          "selector": {
             "type": "xpathSelector",
             "attribute": null,
             "value": "//button[text()='2' and not(@disabled)]",
@@ -5721,7 +6049,7 @@
       ]
     },
     "status": "success",
-    "elapsed": 2.84
+    "elapsed": 2.11
   },
   {
     "task": {
@@ -5909,7 +6237,7 @@
         {
           "type": "SelectDropDownOptionAction",
           "attributes": {
-            "text": "🇦🇷 +54",
+            "text": "\u00f0\u0178\u2021\u00a6\u00f0\u0178\u2021\u00b7 +54",
             "selector": {
               "type": "attributeValueSelector",
               "value": "country-picker-dropdown",
@@ -5918,7 +6246,7 @@
             },
             "timeout_ms": 1000
           },
-          "text": "🇦🇷 +54",
+          "text": "\u00f0\u0178\u2021\u00a6\u00f0\u0178\u2021\u00b7 +54",
           "selector": {
             "type": "attributeValueSelector",
             "value": "country-picker-dropdown",
@@ -6120,7 +6448,7 @@
           "selector": {
             "type": "xpathSelector",
             "attribute": null,
-            "value": "//input[contains(@placeholder, 'Confirma tu contraseña')]",
+            "value": "//input[contains(@placeholder, 'Confirma tu contrase\u00c3\u00b1a')]",
             "case_sensitive": false
           },
           "text": "password123"
@@ -7768,10 +8096,62 @@
       "useCase": "LOG_EDITED",
       "prompt": "Edit log entry where the status is NOT 'Billable' and the client is NOT 'Elite Partners'."
     },
-    "response": null,
-    "status": "error",
-    "error": "",
-    "elapsed": 0.0
+    "response": {
+      "actions": [
+        {
+          "type": "NavigateAction",
+          "selector": null,
+          "url": "http://localhost:8004/?seed=846",
+          "go_back": false,
+          "go_forward": false
+        },
+        {
+          "type": "ClickAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//a[contains(@href, '/billing')]",
+            "case_sensitive": false
+          },
+          "x": null,
+          "y": null
+        },
+        {
+          "type": "ClickAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "(//button[contains(@title, 'Edit')])[72]",
+            "case_sensitive": false
+          },
+          "x": null,
+          "y": null
+        },
+        {
+          "type": "TypeAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//input[contains(@id, 'edit-matter-72')]",
+            "case_sensitive": false
+          },
+          "text": "Example Log"
+        },
+        {
+          "type": "ClickAction",
+          "selector": {
+            "type": "xpathSelector",
+            "attribute": null,
+            "value": "//button[contains(text(), 'Confirm')]",
+            "case_sensitive": false
+          },
+          "x": null,
+          "y": null
+        }
+      ]
+    },
+    "status": "success",
+    "elapsed": 1.39
   },
   {
     "task": {
@@ -7882,7 +8262,7 @@
       "taskId": "8c37e7a8-37c1-4647-9596-344a35eaac16",
       "website": "http://localhost:8008/?seed=929",
       "useCase": "ADD_EXPERIENCE",
-      "prompt": "Add a new experience with company equal to 'Apple', duration equal to 'Sep 2017 - Present • 8 yrs 3 mos', title that does NOT CONTAIN 'thk', and location that does NOT CONTAIN 'lds'."
+      "prompt": "Add a new experience with company equal to 'Apple', duration equal to 'Sep 2017 - Present \u00e2\u20ac\u00a2 8 yrs 3 mos', title that does NOT CONTAIN 'thk', and location that does NOT CONTAIN 'lds'."
     },
     "response": null,
     "status": "error",
