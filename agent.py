@@ -16,11 +16,15 @@ Enhancements over baseline:
 - Cards preview on early steps
 - Knowledge base for known task shortcuts
 - Enhanced credential extraction
+- Auto-learning: persist successful task sequences
+- Metrics tracking: observability into stage resolution rates
 """
 from __future__ import annotations
 import json
 import os
+import time
 import logging
+import threading
 
 from config import (
     detect_website,
@@ -42,6 +46,7 @@ from llm_client import LLMClient
 from prompts import build_system_prompt, build_user_prompt
 from action_builder import parse_llm_response, build_iwa_action, WAIT_ACTION
 from tool_use import run_tool, tool_list_cards
+from metrics import AgentMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -59,11 +64,14 @@ def _get_llm_client() -> LLMClient:
 # Knowledge base: pre-recorded actions for known tasks
 # ---------------------------------------------------------------------------
 
+_KB_PATH = os.path.join(os.path.dirname(__file__), "data", "baseline_actions.json")
+_KB_LOCK = threading.Lock()
+
+
 def _load_task_knowledge() -> dict[str, list[dict]]:
     kb: dict[str, list[dict]] = {}
-    p = os.path.join(os.path.dirname(__file__), "data", "baseline_actions.json")
     try:
-        with open(p, "r", encoding="utf-8") as f:
+        with open(_KB_PATH, "r", encoding="utf-8") as f:
             for entry in json.load(f):
                 if entry.get("status") != "success" or not entry.get("response"):
                     continue
@@ -77,6 +85,99 @@ def _load_task_knowledge() -> dict[str, list[dict]]:
 
 
 _TASK_KNOWLEDGE = _load_task_knowledge()
+AgentMetrics().set_kb_size(len(_TASK_KNOWLEDGE))
+
+# Auto-learning: track action sequences to persist to KB
+_TASK_ACTION_LOG: dict[str, dict] = {}  # task_id -> {actions: [...], prompt: str, website: str, use_case: str}
+_MAX_ACTION_LOG_ENTRIES = 50
+_MAX_KB_ENTRIES = 500
+_MAX_KB_FILE_ENTRIES = 1000
+
+
+def _start_action_log(task_id: str, prompt: str, website: str, use_case: str) -> None:
+    """Initialize action log for auto-learning on a new task."""
+    # Evict oldest entries if log is getting too large
+    while len(_TASK_ACTION_LOG) >= _MAX_ACTION_LOG_ENTRIES:
+        oldest = next(iter(_TASK_ACTION_LOG))
+        del _TASK_ACTION_LOG[oldest]
+    _TASK_ACTION_LOG[task_id] = {
+        "actions": [],
+        "prompt": prompt,
+        "website": website,
+        "use_case": use_case,
+    }
+
+
+def _append_action_log(task_id: str, actions: list[dict]) -> None:
+    """Append actions to the log for a task."""
+    if task_id in _TASK_ACTION_LOG:
+        _TASK_ACTION_LOG[task_id]["actions"].extend(actions)
+
+
+def auto_learn_task(task_id: str, success: bool = True) -> None:
+    """Persist a completed task's action sequence into the knowledge base."""
+    if not success or task_id not in _TASK_ACTION_LOG:
+        _TASK_ACTION_LOG.pop(task_id, None)
+        return
+
+    log = _TASK_ACTION_LOG.pop(task_id)
+    actions = log["actions"]
+    if not actions or len(actions) < 2:
+        return
+
+    if task_id in _TASK_KNOWLEDGE:
+        return
+
+    while len(_TASK_KNOWLEDGE) >= _MAX_KB_ENTRIES:
+        oldest = next(iter(_TASK_KNOWLEDGE))
+        del _TASK_KNOWLEDGE[oldest]
+
+    _TASK_KNOWLEDGE[task_id] = actions
+    AgentMetrics().record_auto_learn()
+    AgentMetrics().set_kb_size(len(_TASK_KNOWLEDGE))
+    logger.info(f"Auto-learned task {task_id}: {len(actions)} actions ({log['use_case']})")
+
+    def _persist():
+        with _KB_LOCK:
+            try:
+                with open(_KB_PATH, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception:
+                data = []
+
+            existing_ids = {
+                (e.get("task") or {}).get("taskId", "") for e in data
+            }
+            if task_id in existing_ids:
+                return
+
+            if len(data) >= _MAX_KB_FILE_ENTRIES:
+                kept = [e for e in data if e.get("source") != "auto_learned"]
+                auto = [e for e in data if e.get("source") == "auto_learned"]
+                auto = auto[len(auto) // 2:]
+                data = kept + auto
+                logger.info(f"KB file pruned to {len(data)} entries")
+
+            entry = {
+                "task": {
+                    "taskId": task_id,
+                    "website": log["website"],
+                    "useCase": log["use_case"],
+                    "prompt": log["prompt"],
+                },
+                "response": {
+                    "actions": [{"type": "NavigateAction", "url": log["website"]}] + actions
+                },
+                "status": "success",
+                "source": "auto_learned",
+            }
+            data.append(entry)
+
+            with open(_KB_PATH, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            logger.info(f"Persisted auto-learned task {task_id} to KB (total: {len(data)})")
+
+    threading.Thread(target=_persist, daemon=True).start()
 
 
 def _record_actions(task_id: str, actions: list[dict], url: str, step: int) -> None:
@@ -113,6 +214,8 @@ async def handle_act(
     website = web_project_id or detect_website(url)
     seed = extract_seed(url)
     state = StateTracker.get_or_create(task)
+    metrics = AgentMetrics()
+    step_start = time.time()
 
     # Initialize on step 0
     if step == 0:
@@ -129,12 +232,18 @@ async def handle_act(
         state.last_sig = ""
         state.repeat_count = 0
         StateTracker.auto_cleanup()
+        metrics.record_new_task()
+        # Start action log for auto-learning
+        _start_action_log(task, prompt, url, state.task_type)
 
     # ===================================================================
     # STAGE 0: Knowledge base lookup (skip LLM for known tasks)
     # ===================================================================
     known_actions = _TASK_KNOWLEDGE.get(task)
     if known_actions:
+        latency = (time.time() - step_start) * 1000
+        metrics.record_resolution("kb_lookup", website, state.task_type, latency)
+        metrics.record_kb_hit()
         if step < len(known_actions):
             return [known_actions[step]]
         return []
@@ -151,8 +260,11 @@ async def handle_act(
     # ===================================================================
     quick = try_quick_click(prompt, url, seed, step)
     if quick is not None:
+        latency = (time.time() - step_start) * 1000
+        metrics.record_resolution("quick_click", website, state.task_type, latency)
         logger.info(f"Quick click: {len(quick)} actions")
         _record_actions(task, quick, url, step)
+        _append_action_log(task, quick)
         return quick
 
     # ===================================================================
@@ -160,8 +272,11 @@ async def handle_act(
     # ===================================================================
     search = try_search_shortcut(prompt, website)
     if search is not None:
+        latency = (time.time() - step_start) * 1000
+        metrics.record_resolution("search_shortcut", website, state.task_type, latency)
         logger.info(f"Search shortcut: {len(search)} actions")
         _record_actions(task, search, url, step)
+        _append_action_log(task, search)
         return search
 
     # ===================================================================
@@ -175,6 +290,23 @@ async def handle_act(
         candidates = []
 
     # ===================================================================
+    # Pre-compute credentials early so shortcuts can use them
+    # ===================================================================
+    _creds = extract_credentials(prompt)
+    if relevant_data and isinstance(relevant_data, dict):
+        for k, v in relevant_data.items():
+            if isinstance(v, str) and v:
+                _creds.setdefault(str(k), str(v))
+    for c in state.constraints:
+        if c.operator == "equals" and isinstance(c.value, str):
+            _creds.setdefault(c.field, c.value)
+
+    _has_not_constraints = any(
+        c.operator in ("not_equals", "not_contains", "not_in")
+        for c in state.constraints
+    )
+
+    # ===================================================================
     # STAGE 3: Form-based shortcuts (login/reg/contact/logout)
     # ===================================================================
     shortcut_type = classify_shortcut_type(prompt)
@@ -184,10 +316,16 @@ async def handle_act(
         shortcut_type = "login"
 
     if shortcut_type and soup and candidates:
-        shortcut_actions = try_shortcut(shortcut_type, candidates, soup, step)
+        shortcut_actions = try_shortcut(
+            shortcut_type, candidates, soup, step,
+            creds=_creds, has_not_constraints=_has_not_constraints,
+        )
         if shortcut_actions is not None:
+            latency = (time.time() - step_start) * 1000
+            metrics.record_resolution("form_shortcut", website, state.task_type, latency)
             logger.info(f"Shortcut '{shortcut_type}': {len(shortcut_actions)} actions")
             _record_actions(task, shortcut_actions, url, step)
+            _append_action_log(task, shortcut_actions)
             if shortcut_type == "login":
                 StateTracker.mark_login_done(task)
             return shortcut_actions
@@ -231,17 +369,15 @@ async def handle_act(
         page_summary = (soup.get_text(separator=" ", strip=True) or "")[:400]
     state_delta = StateTracker.compute_state_delta(task, url, page_summary, candidates)
 
-    # Cards preview for early steps
+    # Cards preview (all steps — prompt layer caps length for later steps)
     cards_preview = ""
-    if step <= 2:
-        try:
-            cards_obj = tool_list_cards(candidates=candidates, max_cards=6, max_text=120)
-            if cards_obj.get("ok") and cards_obj.get("cards"):
-                cards_preview = json.dumps(cards_obj["cards"], ensure_ascii=True)
-                if len(cards_preview) > 600:
-                    cards_preview = cards_preview[:597] + "..."
-        except Exception:
-            cards_preview = ""
+    try:
+        max_cards = 6 if step <= 2 else 4
+        cards_obj = tool_list_cards(candidates=candidates, max_cards=max_cards, max_text=120)
+        if cards_obj.get("ok") and cards_obj.get("cards"):
+            cards_preview = json.dumps(cards_obj["cards"], ensure_ascii=True)
+    except Exception:
+        cards_preview = ""
 
     # Extra stuck hint from repeat detection
     extra_hint = ""
@@ -259,17 +395,8 @@ async def handle_act(
     website_hint = WEBSITE_HINTS.get(website, "") if website else ""
     playbook = TASK_PLAYBOOKS.get(state.task_type, TASK_PLAYBOOKS.get("GENERAL", ""))
 
-    # Credential info - enhanced: also add equals constraints as credential values
-    creds = extract_credentials(prompt)
-    # Add relevant_data credentials
-    if relevant_data and isinstance(relevant_data, dict):
-        for k, v in relevant_data.items():
-            if isinstance(v, str) and v:
-                creds.setdefault(str(k), str(v))
-    # Add all "equals" constraints as directly usable field values
-    for c in state.constraints:
-        if c.operator == "equals" and isinstance(c.value, str):
-            creds.setdefault(c.field, c.value)
+    # Reuse credentials computed earlier (before shortcuts)
+    creds = _creds
 
     creds_block = ""
     if creds:
@@ -384,5 +511,15 @@ async def handle_act(
     sig = f"{decision.get('action')}:{decision.get('candidate_id')}"
     StateTracker.update_action_sig(task, url, sig)
 
+    latency = (time.time() - step_start) * 1000
+    metrics.record_resolution("llm_decision", website, state.task_type, latency)
+    metrics.record_llm_usage(client.total_cost, client.total_calls)
+
     _record_actions(task, [action], url, step)
+    _append_action_log(task, [action])
+
+    # Auto-learn: if LLM chose "done", persist action sequence to KB
+    if decision.get("action") == "done":
+        auto_learn_task(task, success=True)
+
     return [action]
